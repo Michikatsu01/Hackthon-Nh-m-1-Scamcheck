@@ -1,12 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scamcheck</title>
+    <title>ScamCheck - Kiểm tra lừa đảo</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        main {
+            width: 100%;
+            max-width: 42rem;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        h1 {
+            margin: 1.5rem 0;
+            color: #1e40af;
+            font-size: 1.875rem;
+            text-align: center;
+        }
+
+        .card, #result {
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            background: #fff;
+            box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+        }
+
+        label, h2 {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        textarea, button {
+            width: 100%;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 9rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border: 1px solid #9ca3af;
+            border-radius: 0.5rem;
+        }
+
+        textarea:focus {
+            outline: 2px solid #3b82f6;
+            border-color: transparent;
+        }
+
+        button {
+            padding: 1rem;
+            border: 0;
+            border-radius: 0.5rem;
+            background: #2563eb;
+            color: #fff;
+            font-weight: 700;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #93c5fd; cursor: wait; }
+        #resultContainer { margin-top: 2rem; }
+        #result { border-left: 4px solid #3b82f6; white-space: pre-wrap; }
+        footer {
+            max-width: 42rem;
+            margin: 2.5rem auto 0;
+            padding: 1rem;
+            border-top: 1px solid #d1d5db;
+            color: #6b7280;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .hidden { display: none; }
+    </style>
 </head>
+
 <body>
-    <a>Gemini API key</a>
-    <input type="text" name="apikey" placeholder="API Key">
+    <main>
+        <h1>ScamCheck</h1>
+
+        <nav class="mode-navigation" aria-label="Chuyển chế độ">
+            <button type="button" id="openPracticeBtn">Vào phòng luyện tập</button>
+            <button type="button" id="backToCheckBtn" class="hidden">Quay lại kiểm tra tin</button>
+        </nav>
+
+        <section id="checkerSection">
+        <div class="card">
+            <div class="sample-messages" aria-label="Tin nhắn mẫu">
+                <p>Chọn một tin mẫu để thử:</p>
+                <div class="sample-buttons">
+                    <button type="button" class="sample-btn" data-sample="bank">Giả mạo Ngân hàng</button>
+                    <button type="button" class="sample-btn" data-sample="police">Giả mạo Công an</button>
+                    <button type="button" class="sample-btn" data-sample="prize">Thông báo trúng thưởng</button>
+                </div>
+            </div>
+
+            <label for="smsInput">Dán nội dung tin nhắn vào đây:</label>
+            <textarea
+                id="smsInput"
+                rows="6"
+                placeholder="Ví dụ: Chúc mừng bạn đã trúng thưởng 50 triệu đồng..."
+            ></textarea>
+
+            <button
+                type="button"
+                id="checkBtn"
+            >Kiểm tra ngay</button>
+
+            <div id="loadingIndicator" class="loading-indicator hidden" role="status" aria-live="polite">
+                <span class="spinner" aria-hidden="true"></span>
+                Đang phân tích tin nhắn, vui lòng chờ...
+            </div>
+        </div>
+
+        <div id="resultContainer" class="hidden">
+            <h2>Kết quả phân tích:</h2>
+            <div id="result"></div>
+        </div>
+
+        <section id="historySection" class="history-section" aria-labelledby="historyTitle">
+            <h2 id="historyTitle">Lịch sử kiểm tra</h2>
+            <div id="historyList" class="history-list">
+                <p>Chưa có lịch sử kiểm tra.</p>
+            </div>
+        </section>
+        </section>
+
+        <section id="practiceSection" class="hidden" aria-labelledby="practiceTitle">
+            <div class="card practice-card">
+                <h2 id="practiceTitle">Phòng luyện tập nhận diện lừa đảo</h2>
+                <p id="practiceScore" class="practice-score" aria-live="polite"></p>
+                <div id="practiceQuestion" class="practice-question"></div>
+                <div id="practiceChoices" class="practice-choices">
+                    <button type="button" id="practiceScamBtn" class="practice-scam-btn">Lừa đảo</button>
+                    <button type="button" id="practiceSafeBtn" class="practice-safe-btn">An toàn</button>
+                </div>
+                <div id="practiceFeedback" class="practice-feedback" aria-live="polite"></div>
+                <button type="button" id="practiceNextBtn" class="hidden">Tin tiếp theo</button>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        ScamCheck là công cụ giáo dục và không thay thế cảnh báo từ ngân hàng hoặc cơ quan chức năng.
+    </footer>
+
+    <script src="config.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
