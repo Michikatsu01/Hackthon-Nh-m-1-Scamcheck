@@ -382,16 +382,88 @@ footer { padding: 22px 30px 30px; color: var(--muted); font-size: .72rem; text-a
 html body :is(p, li, button, label, textarea, small, summary, time, .ai-usage, .category-btn strong, .privacy-note, .section-tag, .eyebrow) { font-size: 18px; }
 body.large-text :is(p, li, button, label, textarea, small, summary, time, .ai-usage, .category-btn strong, .privacy-note, .section-tag, .eyebrow) { font-size: 22px; }
 body.large-text { font-size: 22px; }
-body.high-contrast { --canvas: #000; --surface: #000; --ink: #fff; --navy: #fff; --muted: #fff; --line: #fff; --green-light: #001f14; background: #000; color: #fff; }
-body.high-contrast :is(.sidebar, .topbar, .content-card, .analysis-section, textarea, button, .history-item, .library-item, .rescue-steps li) { border-color: #fff; background: #000; color: #fff; box-shadow: none; }
-body.high-contrast .practice-choices button[aria-pressed="true"] { border-color: #00ffff; background: #003b46; color: #fff; outline: 3px solid #00ffff; }
+body.high-contrast {
+    color-scheme: dark;
+    --canvas: #000;
+    --surface: #000;
+    --ink: #fff;
+    --navy: #fff;
+    --navy-soft: #fff;
+    --muted: #fff;
+    --line: #fff;
+    --green: #00ff9d;
+    --green-dark: #00ff9d;
+    --green-light: #001f14;
+    --blue: #6db1ff;
+    --blue-light: #001d3d;
+    --orange: #ffb45c;
+    --red: #ff7676;
+    --shadow: none;
+    background: #000;
+    color: #fff;
+}
+body.high-contrast :is(
+    .sidebar, .topbar, .content-card, .analysis-section, .welcome-panel,
+    .sidebar-tip, .safety-status, .ai-usage, .section-tag, .step-number,
+    .practice-message, .answer-letter, .quiz-progress-panel, .question-navigation,
+    .quiz-results-summary, .quiz-review-item, .quiz-advice, .library-detail,
+    .library-example, .rescue-analysis, .share-analysis, .streaming-preview,
+    .ai-log-panel, .empty-state, textarea, button, .history-item, .library-item,
+    .rescue-steps li, .detective-board, .case-header, .case-source, .evidence-card,
+    .no-evidence-note, .final-conclusion, .evidence-quote, .risk-badge,
+    .evidence-number, .evidence-severity
+) {
+    border-color: #fff;
+    background: #000;
+    background-image: none;
+    color: #fff;
+    box-shadow: none;
+}
+body.high-contrast :is(
+    h1, h2, h3, h4, label, footer, .brand, .brand small, .nav-label,
+    .category-btn, .category-btn small, .sidebar-tip p, .sidebar-tip strong,
+    .welcome-panel p, .section-intro p, .privacy-note, .sample-messages p,
+    .word-count, .assistive-status, .history-heading span, .library-item span,
+    .library-example strong, .library-example p, .library-detail-group,
+    .ai-log-panel summary, .case-header .case-heading h3, .case-kicker,
+    .case-metadata dt, .case-metadata dd, .case-source-label,
+    .case-source .message-content, .evidence-timeline > h4, .evidence-label,
+    .evidence-card h4, .evidence-explanation, .final-conclusion p
+) {
+    color: #fff;
+}
+body.high-contrast textarea::placeholder { color: #d7d7d7; opacity: 1; }
+body.high-contrast :is(a, summary) { text-decoration: underline; text-underline-offset: 3px; }
+body.high-contrast :is(.primary-action, .utility-btn[aria-pressed="true"], .category-btn.is-active) {
+    border-color: #00ffff;
+    background: #00ffff;
+    color: #000;
+    outline: 2px solid #00ffff;
+    outline-offset: 2px;
+}
+body.high-contrast :is(.utility-btn[aria-pressed="true"], .category-btn.is-active) :is(strong, small, .category-icon) {
+    color: #000;
+}
+body.high-contrast .practice-choices button[aria-pressed="true"] {
+    border-color: #00ffff;
+    background: #003b46;
+    color: #fff;
+    outline: 3px solid #00ffff;
+}
 body.high-contrast .practice-choices button[aria-pressed="true"] .answer-letter,
-body.high-contrast .question-number-btn.is-answered { border-color: #ffea00; background: #ffea00; color: #000; }
+body.high-contrast .question-number-btn.is-answered {
+    border-color: #ffea00;
+    background: #ffea00;
+    color: #000;
+}
 body.high-contrast .question-number-btn.is-current { outline: 3px solid #00ffff; }
-body.high-contrast .rescue-choices button.is-selected { border-color: #ffea00; background: #ffea00; color: #000; outline: 3px solid #00ffff; }
+body.high-contrast .rescue-choices button.is-selected {
+    border-color: #ffea00;
+    background: #ffea00;
+    color: #000;
+    outline: 3px solid #00ffff;
+}
 body.high-contrast mark { background: #ffea00; color: #000; }
-body.high-contrast :is(.detective-board, .case-header, .case-source, .evidence-card, .no-evidence-note, .final-conclusion, .evidence-quote, .risk-badge, .evidence-number, .evidence-severity) { border-color: #fff; background: #000; color: #fff; box-shadow: none; }
-body.high-contrast :is(.case-header .case-heading h3, .case-kicker, .case-metadata dt, .case-metadata dd, .case-source-label, .case-source .message-content, .evidence-timeline > h4, .evidence-label, .evidence-card h4, .evidence-explanation, .final-conclusion p) { color: #fff; }
 body.high-contrast :focus-visible { outline-color: #00ffff; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -529,8 +601,8 @@ body.high-contrast :focus-visible { outline-color: #00ffff; }
     }
     body.high-contrast .category-btn.is-active {
         border-color: #00ffff;
-        background: #003b46;
+        background: #00ffff;
         outline: 2px solid #00ffff;
-        color: #fff;
+        color: #000;
     }
 }

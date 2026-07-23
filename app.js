@@ -64,6 +64,7 @@ let currentResult = null;
 let recognition = null;
 let aiUsageFallback = 0;
 let aiLogFallback = [];
+let currentAccessibilityPreferences = null;
 
 if (API_BASE_URL) {
     fetch(apiUrl('/api/health'), { mode: 'cors' }).catch(() => {
@@ -799,61 +800,153 @@ function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, maxLines = 4)
     if (lines < maxLines) context.fillText(line.trim(), x, y + lines * lineHeight);
 }
 
+async function drawShareCardQr(context, productUrl) {
+    if (typeof window.QRCode !== 'function') return false;
+
+    const qrHolder = document.createElement('div');
+    qrHolder.className = 'qr-render-helper';
+    document.body.append(qrHolder);
+    try {
+        const options = { text: productUrl, width: 190, height: 190 };
+        if (window.QRCode.CorrectLevel?.M !== undefined) {
+            options.correctLevel = window.QRCode.CorrectLevel.M;
+        }
+        new window.QRCode(qrHolder, options);
+
+        // qrcodejs can render either a canvas immediately or an image asynchronously.
+        await Promise.race([
+            new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+            wait(250)
+        ]);
+        const qrCanvas = qrHolder.querySelector('canvas');
+        if (qrCanvas?.width && qrCanvas?.height) {
+            context.drawImage(qrCanvas, 840, 820, 190, 190);
+            return true;
+        }
+
+        const qrImage = qrHolder.querySelector('img');
+        if (!qrImage) return false;
+        if (!qrImage.complete || !qrImage.naturalWidth) {
+            await Promise.race([
+                new Promise(resolve => {
+                    qrImage.addEventListener('load', resolve, { once: true });
+                    qrImage.addEventListener('error', resolve, { once: true });
+                }),
+                wait(2000)
+            ]);
+        }
+        if (!qrImage.complete || !qrImage.naturalWidth) return false;
+        context.drawImage(qrImage, 840, 820, 190, 190);
+        return true;
+    } catch (error) {
+        console.warn('Không thể vẽ mã QR lên ảnh tóm tắt:', error);
+        return false;
+    } finally {
+        qrHolder.remove();
+    }
+}
+
 async function createShareCard() {
     const canvas = document.getElementById('shareCanvas');
     const status = document.getElementById('shareStatus');
-    if (!canvas || !currentResult) return;
+    const createButton = document.getElementById('createShareCardBtn');
+    if (!canvas || !status || !currentResult) return;
     const context = canvas.getContext('2d');
-    const { analysis } = currentResult;
-    context.fillStyle = '#f5f7fb'; context.fillRect(0, 0, 1080, 1080);
-    context.fillStyle = analysis.mau_sac === 'red' ? '#b42318' : analysis.mau_sac === 'yellow' ? '#7a5700' : '#087a55';
-    context.fillRect(0, 0, 1080, 230);
-    context.fillStyle = '#fff'; context.font = 'bold 64px Arial'; context.fillText('ScamCheck', 70, 95);
-    context.font = 'bold 52px Arial'; context.fillText(analysis.muc_do_rui_ro, 70, 180);
-    context.fillStyle = '#10233f'; context.font = 'bold 42px Arial'; context.fillText('Dấu hiệu chính', 70, 310);
-    context.font = '32px Arial';
-    const mainSign = analysis.danh_sach_dau_hieu[0]?.mo_ta || 'Không phát hiện dấu hiệu rõ ràng.';
-    wrapCanvasText(context, mainSign, 70, 370, 760, 48, 4);
-    context.font = 'bold 38px Arial'; context.fillText('Việc nên làm ngay', 70, 610);
-    context.font = '30px Arial';
-    analysis.hanh_dong_de_xuat.slice(0, 3).forEach((action, index) => wrapCanvasText(context, `${index + 1}. ${action}`, 70, 670 + index * 100, 760, 40, 2));
-
-    const productUrl = typeof PUBLIC_APP_URL !== 'undefined' && PUBLIC_APP_URL ? PUBLIC_APP_URL : `${location.origin}${location.pathname}`;
-    if (typeof window.QRCode === 'function') {
-        const qrHolder = document.createElement('div');
-        qrHolder.className = 'qr-render-helper';
-        document.body.append(qrHolder);
-        new window.QRCode(qrHolder, { text: productUrl, width: 190, height: 190, correctLevel: window.QRCode.CorrectLevel.M });
-        await wait(50);
-        const qrImage = qrHolder.querySelector('canvas, img');
-        if (qrImage) context.drawImage(qrImage, 840, 820, 190, 190);
-        qrHolder.remove();
-        context.font = '22px Arial'; context.fillText('Quét để mở ScamCheck', 805, 1040);
-    } else {
-        context.font = '24px Arial'; wrapCanvasText(context, productUrl, 820, 860, 210, 32, 5);
+    if (!context) {
+        status.textContent = 'Trình duyệt không hỗ trợ tạo ảnh. Bác hãy chụp màn hình kết quả.';
+        return;
     }
-    canvas.classList.remove('hidden');
-    document.getElementById('shareCardBtn').classList.remove('hidden');
-    document.getElementById('downloadCardBtn').classList.remove('hidden');
-    status.textContent = 'Ảnh vuông 1080 × 1080 đã sẵn sàng.';
+    const { analysis } = currentResult;
+    createButton?.setAttribute('disabled', '');
+    status.textContent = 'Đang tạo ảnh tóm tắt…';
+
+    try {
+        canvas.width = 1080;
+        canvas.height = 1080;
+        context.fillStyle = '#f5f7fb'; context.fillRect(0, 0, 1080, 1080);
+        context.fillStyle = analysis.mau_sac === 'red' ? '#b42318' : analysis.mau_sac === 'yellow' ? '#7a5700' : '#087a55';
+        context.fillRect(0, 0, 1080, 230);
+        context.fillStyle = '#fff'; context.font = 'bold 64px Arial'; context.fillText('ScamCheck', 70, 95);
+        context.font = 'bold 52px Arial'; context.fillText(analysis.muc_do_rui_ro, 70, 180);
+        context.fillStyle = '#10233f'; context.font = 'bold 42px Arial'; context.fillText('Dấu hiệu chính', 70, 310);
+        context.font = '32px Arial';
+        const mainSign = analysis.danh_sach_dau_hieu[0]?.mo_ta || 'Không phát hiện dấu hiệu rõ ràng.';
+        wrapCanvasText(context, mainSign, 70, 370, 760, 48, 4);
+        context.font = 'bold 38px Arial'; context.fillText('Việc nên làm ngay', 70, 610);
+        context.font = '30px Arial';
+        analysis.hanh_dong_de_xuat.slice(0, 3).forEach((action, index) => {
+            wrapCanvasText(context, `${index + 1}. ${action}`, 70, 670 + index * 100, 760, 40, 2);
+        });
+
+        const productUrl = typeof PUBLIC_APP_URL !== 'undefined' && PUBLIC_APP_URL
+            ? PUBLIC_APP_URL
+            : `${location.origin}${location.pathname}`;
+        context.fillStyle = '#fff';
+        context.fillRect(820, 800, 230, 250);
+        const qrDrawn = await drawShareCardQr(context, productUrl);
+        context.fillStyle = '#10233f';
+        if (qrDrawn) {
+            context.font = '22px Arial';
+            context.fillText('Quét để mở ScamCheck', 805, 1040);
+        } else {
+            context.font = '24px Arial';
+            wrapCanvasText(context, productUrl, 835, 850, 200, 32, 6);
+        }
+
+        canvas.classList.remove('hidden');
+        document.getElementById('shareCardBtn')?.classList.remove('hidden');
+        document.getElementById('downloadCardBtn')?.classList.remove('hidden');
+        status.textContent = 'Ảnh vuông 1080 × 1080 đã sẵn sàng.';
+    } finally {
+        createButton?.removeAttribute('disabled');
+    }
 }
 
 function canvasToBlob(canvas) {
-    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (typeof canvas?.toBlob === 'function') {
+        return new Promise((resolve, reject) => {
+            try {
+                canvas.toBlob(
+                    blob => blob ? resolve(blob) : reject(new Error('Trình duyệt không thể xuất dữ liệu PNG.')),
+                    'image/png'
+                );
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    return fetch(canvas.toDataURL('image/png')).then(response => response.blob());
 }
 
 async function shareOrDownloadCard(share) {
     const canvas = document.getElementById('shareCanvas');
+    const status = document.getElementById('shareStatus');
+    if (!canvas || canvas.classList.contains('hidden')) {
+        if (status) status.textContent = 'Bác hãy tạo ảnh tóm tắt trước.';
+        return;
+    }
     const blob = await canvasToBlob(canvas);
-    if (!blob) return;
-    const file = new File([blob], 'scamcheck-canh-bao.png', { type: 'image/png' });
-    if (share && navigator.canShare?.({ files: [file] })) {
+    const file = typeof File === 'function'
+        ? new File([blob], 'scamcheck-canh-bao.png', { type: 'image/png' })
+        : null;
+    if (share && file && navigator.canShare?.({ files: [file] })) {
         await navigator.share({ title: 'Cảnh báo ScamCheck', files: [file] });
+        if (status) status.textContent = 'Đã mở bảng chia sẻ ảnh.';
         return;
     }
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob); link.download = file.name; link.click();
-    window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    link.href = URL.createObjectURL(blob);
+    link.download = file?.name || 'scamcheck-canh-bao.png';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    if (status) {
+        status.textContent = share
+            ? 'Thiết bị không hỗ trợ chia sẻ trực tiếp nên ảnh đã được tải xuống.'
+            : 'Ảnh đã được tải xuống.';
+    }
 }
 
 function renderQuestionNavigator() {
@@ -1115,15 +1208,31 @@ resultDiv.addEventListener('click', async event => {
 });
 
 function setAccessibilityPreferences(preferences) {
-    document.body.classList.toggle('large-text', Boolean(preferences.largeText));
-    document.body.classList.toggle('high-contrast', Boolean(preferences.highContrast));
-    fontSizeBtn.setAttribute('aria-pressed', String(Boolean(preferences.largeText)));
-    contrastBtn.setAttribute('aria-pressed', String(Boolean(preferences.highContrast)));
-    try { localStorage.setItem(PREFERENCE_KEY, JSON.stringify(preferences)); } catch { /* Tuỳ chọn vẫn áp dụng trong trang hiện tại. */ }
+    const normalizedPreferences = {
+        largeText: Boolean(preferences?.largeText),
+        highContrast: Boolean(preferences?.highContrast)
+    };
+    currentAccessibilityPreferences = normalizedPreferences;
+    document.body.classList.toggle('large-text', normalizedPreferences.largeText);
+    document.body.classList.toggle('high-contrast', normalizedPreferences.highContrast);
+    fontSizeBtn.setAttribute('aria-pressed', String(normalizedPreferences.largeText));
+    contrastBtn.setAttribute('aria-pressed', String(normalizedPreferences.highContrast));
+    contrastBtn.textContent = normalizedPreferences.highContrast
+        ? 'Tắt tương phản cao'
+        : 'Tương phản cao';
+    try { localStorage.setItem(PREFERENCE_KEY, JSON.stringify(normalizedPreferences)); } catch { /* Tuỳ chọn vẫn áp dụng trong trang hiện tại. */ }
 }
 
 function getAccessibilityPreferences() {
-    try { return JSON.parse(localStorage.getItem(PREFERENCE_KEY) || '{}'); } catch { return {}; }
+    if (currentAccessibilityPreferences) return currentAccessibilityPreferences;
+    try {
+        const storedPreferences = JSON.parse(localStorage.getItem(PREFERENCE_KEY) || '{}');
+        return storedPreferences && typeof storedPreferences === 'object'
+            ? storedPreferences
+            : {};
+    } catch {
+        return {};
+    }
 }
 
 fontSizeBtn.addEventListener('click', () => {
@@ -1279,9 +1388,24 @@ checkBtn.addEventListener('click', async () => {
     }
 });
 
-function runSelfTests() {
+async function runSelfTests() {
     const results = [];
     const assert = (name, condition) => results.push({ name, passed: Boolean(condition) });
+    const previousAccessibilityPreferences = getAccessibilityPreferences();
+    setAccessibilityPreferences({ ...previousAccessibilityPreferences, highContrast: true });
+    assert(
+        'Bật tương phản cao',
+        document.body.classList.contains('high-contrast')
+            && contrastBtn.getAttribute('aria-pressed') === 'true'
+            && contrastBtn.textContent.includes('Tắt')
+    );
+    setAccessibilityPreferences({ ...previousAccessibilityPreferences, highContrast: false });
+    assert(
+        'Tắt tương phản cao',
+        !document.body.classList.contains('high-contrast')
+            && contrastBtn.getAttribute('aria-pressed') === 'false'
+    );
+    setAccessibilityPreferences(previousAccessibilityPreferences);
     const previousResultHtml = resultDiv.innerHTML;
     const previousCurrentResult = currentResult;
     renderAnalysis('Gia đình hẹn ăn cơm lúc 6 giờ.', {
@@ -1344,6 +1468,41 @@ function runSelfTests() {
     fakeDomainCases.forEach((domain, index) => assert(`Tên miền giả ${index + 1}`, detectFakeDomains([`https://${domain}`]).length === 1));
     assert('Chuẩn hoá cache tin trùng', normalizeMessage('  NHẬN   OTP ') === normalizeMessage('nhận otp'));
     assert('Thư viện tạo QR sẵn sàng', typeof window.QRCode === 'function');
+
+    let shareCardCreated = false;
+    try {
+        renderAnalysis('Công an yêu cầu cung cấp OTP.', {
+            ...createSafeAnalysis(),
+            muc_do_rui_ro: 'Nguy hiểm',
+            mau_sac: 'red',
+            danh_sach_dau_hieu: [{
+                mo_ta: 'Mạo danh công an và yêu cầu cung cấp mã OTP.',
+                trich_doan: 'cung cấp OTP'
+            }],
+            hanh_dong_de_xuat: [
+                'Không cung cấp mã OTP.',
+                'Ngắt liên lạc với người gửi.',
+                'Kiểm tra qua kênh chính thức.'
+            ]
+        }, 'Cô tâm lý: Bác dễ tin vì kẻ gian tạo áp lực.');
+        await createShareCard();
+        const shareCanvas = document.getElementById('shareCanvas');
+        const shareBlob = await canvasToBlob(shareCanvas);
+        shareCardCreated = Boolean(
+            shareCanvas
+                && !shareCanvas.classList.contains('hidden')
+                && shareCanvas.width === 1080
+                && shareCanvas.height === 1080
+                && shareBlob?.type === 'image/png'
+                && shareBlob.size > 1000
+        );
+    } catch (error) {
+        console.error('Self-test tạo ảnh tóm tắt thất bại:', error);
+    } finally {
+        resultDiv.innerHTML = previousResultHtml;
+        currentResult = previousCurrentResult;
+    }
+    assert('Tạo được ảnh tóm tắt PNG 1080 × 1080', shareCardCreated);
 
     const passed = results.filter(item => item.passed).length;
     const report = document.createElement('section');

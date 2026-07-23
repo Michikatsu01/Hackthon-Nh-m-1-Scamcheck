@@ -65,7 +65,19 @@ try {
     $dom = Get-Content -Raw -Encoding utf8 $stdout.FullName
     $errors = Get-Content -Raw -Encoding utf8 $stderr.FullName
     if ($dom -notmatch 'data-self-test="passed"') {
-        Write-Error "Self-tests failed. $errors"
+        $report = [regex]::Match(
+            $dom,
+            '<section id="selfTestReport".*?</section>',
+            [Text.RegularExpressions.RegexOptions]::Singleline
+        ).Value
+        $details = if ($report) {
+            [Net.WebUtility]::HtmlDecode(
+                ([regex]::Replace($report, '<[^>]+>', "`n") -replace "(`r?`n)\s+", '$1').Trim()
+            )
+        } else {
+            'Không tìm thấy báo cáo self-test trong DOM.'
+        }
+        Write-Error "Self-tests failed.`n$details`n$errors"
         exit 1
     }
     Write-Host 'PASS: parser, 12 edge cases, URL, domain, and phone filtering.'
