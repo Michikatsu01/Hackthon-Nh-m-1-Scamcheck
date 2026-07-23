@@ -37,6 +37,7 @@ const voiceStatus = document.getElementById('voiceStatus');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 const aiUsage = document.getElementById('aiUsage');
 const aiLogList = document.getElementById('aiLogList');
+const aiLogCount = document.getElementById('aiLogCount');
 const fontSizeBtn = document.getElementById('fontSizeBtn');
 const contrastBtn = document.getElementById('contrastBtn');
 
@@ -115,9 +116,48 @@ function renderAiUsage() {
     const used = getAiUsage();
     aiUsage.textContent = `AI: ${used}/${MAX_AI_CALLS_PER_SESSION} lượt`;
     const logs = getAiLog();
+    if (aiLogCount) {
+        aiLogCount.textContent = logs.length ? `${logs.length} bản ghi` : 'Trống';
+    }
     aiLogList.innerHTML = logs.length
-        ? `<ol>${logs.map(item => `<li><time>${escapeHtml(new Date(item.time).toLocaleTimeString('vi-VN'))}</time> · ${escapeHtml(item.purpose)} · ${escapeHtml(item.model)} · ${escapeHtml(item.inputLength)} ký tự · ${escapeHtml(item.summary)}</li>`).join('')}</ol>`
-        : '<p>Chưa có lần gọi AI nào trong phiên này.</p>';
+        ? `<div class="ai-log-table-wrap">
+            <table class="ai-log-table">
+                <caption class="visually-hidden">Các lượt gọi AI trong phiên hiện tại</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Thời gian</th>
+                        <th scope="col">Vai trò</th>
+                        <th scope="col">Model</th>
+                        <th scope="col">Đầu vào</th>
+                        <th scope="col">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${logs.map(item => {
+                        const timestamp = new Date(item.time);
+                        const displayTime = Number.isNaN(timestamp.getTime())
+                            ? 'Không rõ'
+                            : timestamp.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        const inputLength = Number(item.inputLength);
+                        const displayLength = Number.isFinite(inputLength)
+                            ? inputLength.toLocaleString('vi-VN')
+                            : String(item.inputLength || 0);
+                        const isSuccess = String(item.summary || '').toLocaleLowerCase('vi').startsWith('thành công');
+                        return `<tr>
+                            <td data-label="Thời gian"><time datetime="${escapeHtml(item.time)}">${escapeHtml(displayTime)}</time></td>
+                            <td data-label="Vai trò"><span class="ai-role-badge">${escapeHtml(item.purpose)}</span></td>
+                            <td data-label="Model"><code>${escapeHtml(item.model)}</code></td>
+                            <td data-label="Đầu vào" class="ai-log-number">${escapeHtml(displayLength)} ký tự</td>
+                            <td data-label="Trạng thái"><span class="ai-log-status ${isSuccess ? 'is-success' : 'is-error'}">${escapeHtml(item.summary)}</span></td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`
+        : `<div class="ai-log-empty">
+            <span aria-hidden="true">AI</span>
+            <div><strong>Chưa có lượt gọi nào</strong><p>Nhật ký sẽ xuất hiện sau khi bác kiểm tra một tin nhắn mới.</p></div>
+        </div>`;
 }
 
 function reserveAiCall() {
