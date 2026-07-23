@@ -800,6 +800,10 @@ function wrapCanvasText(context, text, x, y, maxWidth, lineHeight, maxLines = 4)
     if (lines < maxLines) context.fillText(line.trim(), x, y + lines * lineHeight);
 }
 
+function delay(milliseconds) {
+    return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+}
+
 async function drawShareCardQr(context, productUrl) {
     if (typeof window.QRCode !== 'function') return false;
 
@@ -816,7 +820,7 @@ async function drawShareCardQr(context, productUrl) {
         // qrcodejs can render either a canvas immediately or an image asynchronously.
         await Promise.race([
             new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-            wait(250)
+            delay(250)
         ]);
         const qrCanvas = qrHolder.querySelector('canvas');
         if (qrCanvas?.width && qrCanvas?.height) {
@@ -832,7 +836,7 @@ async function drawShareCardQr(context, productUrl) {
                     qrImage.addEventListener('load', resolve, { once: true });
                     qrImage.addEventListener('error', resolve, { once: true });
                 }),
-                wait(2000)
+                delay(2000)
             ]);
         }
         if (!qrImage.complete || !qrImage.naturalWidth) return false;
@@ -897,6 +901,7 @@ async function createShareCard() {
         document.getElementById('shareCardBtn')?.classList.remove('hidden');
         document.getElementById('downloadCardBtn')?.classList.remove('hidden');
         status.textContent = 'Ảnh vuông 1080 × 1080 đã sẵn sàng.';
+        return qrDrawn;
     } finally {
         createButton?.removeAttribute('disabled');
     }
@@ -1470,6 +1475,7 @@ async function runSelfTests() {
     assert('Thư viện tạo QR sẵn sàng', typeof window.QRCode === 'function');
 
     let shareCardCreated = false;
+    let shareCardQrDrawn = false;
     try {
         renderAnalysis('Công an yêu cầu cung cấp OTP.', {
             ...createSafeAnalysis(),
@@ -1485,7 +1491,7 @@ async function runSelfTests() {
                 'Kiểm tra qua kênh chính thức.'
             ]
         }, 'Cô tâm lý: Bác dễ tin vì kẻ gian tạo áp lực.');
-        await createShareCard();
+        shareCardQrDrawn = await createShareCard();
         const shareCanvas = document.getElementById('shareCanvas');
         const shareBlob = await canvasToBlob(shareCanvas);
         shareCardCreated = Boolean(
@@ -1503,6 +1509,7 @@ async function runSelfTests() {
         currentResult = previousCurrentResult;
     }
     assert('Tạo được ảnh tóm tắt PNG 1080 × 1080', shareCardCreated);
+    assert('Vẽ được mã QR lên ảnh tóm tắt', shareCardQrDrawn);
 
     const passed = results.filter(item => item.passed).length;
     const report = document.createElement('section');
