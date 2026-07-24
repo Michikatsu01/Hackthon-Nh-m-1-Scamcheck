@@ -1,17 +1,19 @@
 import { sampleMessages } from './data/sample-messages.js';
 import { practiceMessages } from './data/practice-messages.js';
-import { scamLibrary } from './data/scam-library.js';
+import { libraryOverview, scamLibrary } from './data/scam-library.js';
 
 const checkBtn = document.getElementById('checkBtn');
 const resultDiv = document.getElementById('result');
 const resultContainer = document.getElementById('resultContainer');
 const smsInput = document.getElementById('smsInput');
 const wordCount = document.getElementById('wordCount');
+const inputValidationMessage = document.getElementById('inputValidationMessage');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const historyList = document.getElementById('historyList');
 const checkerSection = document.getElementById('checkerSection');
 const practiceSection = document.getElementById('practiceSection');
 const historySection = document.getElementById('historySection');
+const guideSection = document.getElementById('guideSection');
 const categoryButtons = document.querySelectorAll('.category-btn');
 const pageTitle = document.getElementById('pageTitle');
 const brandHome = document.getElementById('brandHome');
@@ -19,6 +21,8 @@ const practiceScore = document.getElementById('practiceScore');
 const practiceQuestion = document.getElementById('practiceQuestion');
 const practiceScamBtn = document.getElementById('practiceScamBtn');
 const practiceSafeBtn = document.getElementById('practiceSafeBtn');
+const practiceHintBtn = document.getElementById('practiceHintBtn');
+const practiceHint = document.getElementById('practiceHint');
 const questionNavigator = document.getElementById('questionNavigator');
 const previousQuestionBtn = document.getElementById('previousQuestionBtn');
 const nextQuestionBtn = document.getElementById('nextQuestionBtn');
@@ -32,6 +36,10 @@ const librarySection = document.getElementById('librarySection');
 const libraryFilters = document.getElementById('libraryFilters');
 const libraryList = document.getElementById('libraryList');
 const libraryDetail = document.getElementById('libraryDetail');
+const libraryOverviewPanel = document.getElementById('libraryOverview');
+const librarySearch = document.getElementById('librarySearch');
+const libraryResultCount = document.getElementById('libraryResultCount');
+const libraryEmpty = document.getElementById('libraryEmpty');
 const voiceBtn = document.getElementById('voiceBtn');
 const voiceStatus = document.getElementById('voiceStatus');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
@@ -40,9 +48,29 @@ const aiLogList = document.getElementById('aiLogList');
 const aiLogCount = document.getElementById('aiLogCount');
 const fontSizeBtn = document.getElementById('fontSizeBtn');
 const contrastBtn = document.getElementById('contrastBtn');
+const systemStatus = document.getElementById('systemStatus');
+const systemStatusText = document.getElementById('systemStatusText');
+const guideDisplayStatus = document.getElementById('guideDisplayStatus');
+const guideFaq = document.querySelector('.guide-faq');
+const guideChatPanel = document.getElementById('guideChatPanel');
+const guideChatCloseBtn = document.getElementById('guideChatCloseBtn');
+const guideChatMessages = document.getElementById('guideChatMessages');
+const guideChatForm = document.getElementById('guideChatForm');
+const guideChatInput = document.getElementById('guideChatInput');
+const guideChatCount = document.getElementById('guideChatCount');
+const guideChatSendBtn = document.getElementById('guideChatSendBtn');
+const guideChatStatus = document.getElementById('guideChatStatus');
+const floatingGuideBtn = document.getElementById('floatingGuideBtn');
 
 const API_BASE_URL = String(window.SCAMCHECK_CONFIG?.API_BASE_URL || '').replace(/\/+$/, '');
 const apiUrl = path => `${API_BASE_URL}${path}`;
+const IS_LOCAL_API = (() => {
+    try {
+        return ['127.0.0.1', 'localhost'].includes(new URL(API_BASE_URL).hostname);
+    } catch {
+        return false;
+    }
+})();
 const HISTORY_KEY = 'scamcheck-history';
 const MAX_INPUT_WORDS = 5000;
 const MAX_INPUT_CHARACTERS = 50000;
@@ -57,8 +85,18 @@ const VERIFIED_HOTLINES = Object.freeze(Array.isArray(window.VERIFIED_HOTLINES) 
 const OFFICIAL_PHONES = Object.freeze(Object.fromEntries(VERIFIED_HOTLINES.map(item => [item.id, item.phone])));
 const BLOCKED_PHONE_MESSAGE = '[Số điện thoại đã bị hệ thống chặn để bảo vệ bác - Vui lòng chỉ gọi số in trên thẻ ngân hàng]';
 const UNSUPPORTED_LANGUAGE_MESSAGE = 'Thám tử hiện chỉ hỗ trợ nội dung bằng tiếng Việt. Bác vui lòng nhập hoặc dịch nội dung sang tiếng Việt rồi thử lại.';
+const TRUSTED_LIBRARY_SOURCE_HOSTS = Object.freeze([
+    'bocongan.gov.vn',
+    'mps.gov.vn',
+    'csgt.vn',
+    'baochinhphu.vn'
+]);
+const PRACTICE_SET_SIZE = 10;
 let practiceIndex = 0;
-const userAnswers = Array(10).fill(null);
+let practiceSetNumber = 1;
+let currentPracticeMessages = [];
+let userAnswers = [];
+let revealedPracticeHints = [];
 let quizSubmitted = false;
 let flowState = 'idle';
 let currentResult = null;
@@ -66,11 +104,71 @@ let recognition = null;
 let aiUsageFallback = 0;
 let aiLogFallback = [];
 let currentAccessibilityPreferences = null;
+let apiHealthPromise = null;
+let lastApiHealth = { checkedAt: 0, available: null };
+let currentLibraryGroup = 'Tất cả';
+let librarySearchQuery = '';
+let lastLibraryTrigger = null;
+let guideChatHistory = [];
+let guideChatPending = false;
 
-if (API_BASE_URL) {
-    fetch(apiUrl('/api/health'), { mode: 'cors' }).catch(() => {
-        // The real action will show a user-facing error if the backend stays unavailable.
-    });
+function updateSystemStatus(state) {
+    if (!systemStatus || !systemStatusText) return;
+    systemStatus.classList.toggle('is-checking', state === 'checking');
+    systemStatus.classList.toggle('is-offline', state === 'offline');
+    systemStatusText.textContent = state === 'ready'
+        ? 'Hệ thống sẵn sàng'
+        : state === 'offline'
+            ? 'Máy chủ AI chưa chạy'
+            : 'Đang kiểm tra máy chủ';
+}
+
+async function checkApiHealth(force = false) {
+    if (!API_BASE_URL) return false;
+    const now = Date.now();
+    if (!force && lastApiHealth.available !== null && now - lastApiHealth.checkedAt < 5000) {
+        return lastApiHealth.available;
+    }
+    if (apiHealthPromise) return apiHealthPromise;
+
+    updateSystemStatus('checking');
+    apiHealthPromise = (async () => {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 3500);
+        try {
+            const response = await fetch(apiUrl('/api/health'), {
+                mode: 'cors',
+                cache: 'no-store',
+                signal: controller.signal
+            });
+            const available = response.ok;
+            lastApiHealth = { checkedAt: Date.now(), available };
+            updateSystemStatus(available ? 'ready' : 'offline');
+            return available;
+        } catch {
+            lastApiHealth = { checkedAt: Date.now(), available: false };
+            updateSystemStatus('offline');
+            return false;
+        } finally {
+            window.clearTimeout(timeoutId);
+            apiHealthPromise = null;
+        }
+    })();
+    return apiHealthPromise;
+}
+
+async function assertLocalApiAvailable() {
+    if (!IS_LOCAL_API) return;
+    if (await checkApiHealth()) return;
+    const error = new Error('Máy chủ AI cục bộ chưa chạy ở cổng 5000.');
+    error.code = 'LOCAL_BACKEND_UNAVAILABLE';
+    throw error;
+}
+
+if (IS_LOCAL_API) {
+    checkApiHealth(true);
+} else {
+    updateSystemStatus('ready');
 }
 
 function countWords(text) {
@@ -92,6 +190,112 @@ function updateWordCount() {
     const totalCharacters = smsInput.value.length;
     wordCount.textContent = `${totalCharacters.toLocaleString('vi-VN')}/${MAX_INPUT_CHARACTERS.toLocaleString('vi-VN')} ký tự · ${totalWords.toLocaleString('vi-VN')}/${MAX_INPUT_WORDS.toLocaleString('vi-VN')} từ`;
     wordCount.classList.toggle('is-over-limit', totalCharacters > MAX_INPUT_CHARACTERS || totalWords > MAX_INPUT_WORDS);
+    if (smsInput.value.trim()) clearInputValidationMessage();
+}
+
+function setInputValidationMessage(message) {
+    const messageText = String(message || '').trim();
+    inputValidationMessage.querySelector('span:last-child').textContent = messageText;
+    inputValidationMessage.classList.toggle('hidden', !messageText);
+    if (messageText) smsInput.setAttribute('aria-invalid', 'true');
+    else smsInput.removeAttribute('aria-invalid');
+}
+
+function clearInputValidationMessage() {
+    setInputValidationMessage('');
+}
+
+function closeOtherFaqItems(openedItem) {
+    if (!openedItem?.open || !guideFaq) return;
+    guideFaq.querySelectorAll('details').forEach(item => {
+        if (item !== openedItem) item.open = false;
+    });
+}
+
+function setGuideChatOpen(isOpen) {
+    guideChatPanel.classList.toggle('hidden', !isOpen);
+    floatingGuideBtn.setAttribute('aria-expanded', String(isOpen));
+    floatingGuideBtn.setAttribute('aria-label', isOpen ? 'Đóng Trợ lý hướng dẫn' : 'Mở Trợ lý hướng dẫn');
+    floatingGuideBtn.classList.toggle('is-active', isOpen);
+    if (isOpen) requestAnimationFrame(() => guideChatInput.focus());
+}
+
+function openFloatingGuideAssistant() {
+    setGuideChatOpen(floatingGuideBtn.getAttribute('aria-expanded') !== 'true');
+}
+
+function appendGuideChatMessage(role, text) {
+    const article = document.createElement('article');
+    article.className = `guide-chat-message ${role === 'user' ? 'is-user' : 'is-assistant'}`;
+    const badge = document.createElement('span');
+    badge.setAttribute('aria-hidden', 'true');
+    badge.textContent = role === 'user' ? 'Bác' : 'AI';
+    const message = document.createElement('p');
+    message.textContent = text;
+    article.append(badge, message);
+    guideChatMessages.append(article);
+    article.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function buildGuideChatPrompt() {
+    const transcript = guideChatHistory.slice(-8).map(item => (
+        `${item.role === 'user' ? 'NGƯỜI DÙNG' : 'TRỢ LÝ'}: ${item.text
+            .replace(/</g, '‹')
+            .replace(/>/g, '›')
+            .replace(/[\u0000-\u001F\u007F]/g, ' ')}`
+    )).join('\n');
+    return `<LICH_SU_TRO_CHUYEN_KHONG_TIN_CAY>\n${transcript}\n</LICH_SU_TRO_CHUYEN_KHONG_TIN_CAY>\nHãy trả lời câu hỏi cuối cùng, chỉ trong phạm vi hướng dẫn sử dụng ScamCheck.`;
+}
+
+function normalizeGuideReply(value) {
+    return sanitizePhoneNumbers(String(value || ''))
+        .replace(/[*_#`]+/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, 1800);
+}
+
+async function sendGuideQuestion(question) {
+    const cleanQuestion = String(question || '').trim().slice(0, 600);
+    if (!cleanQuestion || guideChatPending) {
+        if (!cleanQuestion) {
+            guideChatStatus.textContent = 'Bác hãy nhập một câu hỏi về cách sử dụng ScamCheck.';
+            guideChatInput.focus();
+        }
+        return;
+    }
+
+    guideChatPending = true;
+    guideChatSendBtn.disabled = true;
+    guideChatInput.disabled = true;
+    guideChatStatus.textContent = 'Trợ lý đang đọc câu hỏi của bác…';
+    appendGuideChatMessage('user', cleanQuestion);
+    guideChatHistory.push({ role: 'user', text: cleanQuestion });
+    guideChatInput.value = '';
+    guideChatCount.textContent = '0/600 ký tự';
+
+    try {
+        const response = await generateContentWithFallback({
+            role: 'guide',
+            purpose: 'Trợ lý hướng dẫn',
+            contents: buildGuideChatPrompt(),
+            deadline: Date.now() + 25000
+        });
+        const reply = normalizeGuideReply(response.text);
+        if (!reply) throw new Error('Trợ lý hướng dẫn không trả về nội dung.');
+        appendGuideChatMessage('assistant', reply);
+        guideChatHistory.push({ role: 'assistant', text: reply });
+        guideChatHistory = guideChatHistory.slice(-8);
+        guideChatStatus.textContent = 'Trợ lý đã trả lời. Bác có thể hỏi tiếp.';
+    } catch (error) {
+        console.error('Lỗi Trợ lý hướng dẫn:', error);
+        guideChatStatus.textContent = getAiErrorMessage(error);
+    } finally {
+        guideChatPending = false;
+        guideChatSendBtn.disabled = false;
+        guideChatInput.disabled = false;
+        guideChatInput.focus();
+    }
 }
 
 function getAiUsage() {
@@ -224,6 +428,7 @@ function isTemporaryAiError(error) {
 
 async function generateContentWithFallback({ contents, role, purpose, deadline = Date.now() + AI_OPERATION_TIMEOUT_MS, stream = false, onProgress = null }) {
     if (navigator.onLine === false) throw createOfflineError();
+    await assertLocalApiAvailable();
 
     const remainingTime = deadline - Date.now();
     if (remainingTime <= 0) {
@@ -301,6 +506,9 @@ async function generateContentWithFallback({ contents, role, purpose, deadline =
 
 function getAiErrorMessage(error) {
     const status = getApiStatus(error);
+    if (error?.code === 'LOCAL_BACKEND_UNAVAILABLE') {
+        return 'Máy chủ AI trên máy chưa chạy. Hãy mở terminal tại thư mục dự án, chạy backend ở cổng 5000 rồi thử lại.';
+    }
     if (error?.code === 'AI_SESSION_LIMIT') {
         return `Bác đã dùng hết ${MAX_AI_CALLS_PER_SESSION} lượt AI trong phiên này. Lịch sử và thư viện vẫn dùng được; hãy mở phiên mới khi cần phân tích thêm.`;
     }
@@ -1174,8 +1382,33 @@ async function shareOrDownloadCard(share) {
     }
 }
 
+function shufflePracticeMessages(items) {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+    return shuffled;
+}
+
+function createRandomPracticeSet(excludedTexts = new Set()) {
+    const unusedMessages = practiceMessages.filter(item => !excludedTexts.has(item.text));
+    const questionPool = unusedMessages.length >= PRACTICE_SET_SIZE ? unusedMessages : practiceMessages;
+    return shufflePracticeMessages(questionPool).slice(0, PRACTICE_SET_SIZE);
+}
+
+function prepareInitialPracticeSet() {
+    currentPracticeMessages = createRandomPracticeSet();
+    userAnswers = Array(currentPracticeMessages.length).fill(null);
+    revealedPracticeHints = Array(currentPracticeMessages.length).fill(false);
+}
+
+function getPracticeHint(item) {
+    return String(item?.hint || 'Hãy đọc lại tình huống và tìm chi tiết khiến bác cần xác minh trước khi quyết định.');
+}
+
 function renderQuestionNavigator() {
-    questionNavigator.innerHTML = practiceMessages.map((_, index) => {
+    questionNavigator.innerHTML = currentPracticeMessages.map((_, index) => {
         const isCurrent = index === practiceIndex;
         const isAnswered = userAnswers[index] !== null;
         const stateClass = `${isCurrent ? ' is-current' : ''}${isAnswered ? ' is-answered' : ''}`;
@@ -1185,15 +1418,22 @@ function renderQuestionNavigator() {
 }
 
 function renderPracticeQuestion() {
-    const item = practiceMessages[practiceIndex];
+    const item = currentPracticeMessages[practiceIndex];
     const answeredCount = userAnswers.filter(answer => answer !== null).length;
     const selectedAnswer = userAnswers[practiceIndex];
-    const remainingCount = practiceMessages.length - answeredCount;
+    const isHintRevealed = revealedPracticeHints[practiceIndex];
+    const remainingCount = currentPracticeMessages.length - answeredCount;
 
-    practiceScore.textContent = `Câu ${practiceIndex + 1} / ${practiceMessages.length}`;
+    practiceScore.textContent = `Bộ ${practiceSetNumber} · Câu ${practiceIndex + 1}/${currentPracticeMessages.length}`;
     practiceQuestion.innerHTML = `<p class="question-prompt">Theo bác, tin nhắn dưới đây thuộc loại nào?</p><blockquote class="practice-message">${escapeHtml(item.text)}</blockquote>`;
-    quizProgressText.textContent = `${answeredCount}/${practiceMessages.length}`;
-    quizProgressBar.style.width = `${answeredCount / practiceMessages.length * 100}%`;
+    practiceHintBtn.setAttribute('aria-expanded', String(isHintRevealed));
+    practiceHintBtn.innerHTML = `<span aria-hidden="true">💡</span> ${isHintRevealed ? 'Ẩn gợi ý' : 'Xem gợi ý'}`;
+    practiceHint.classList.toggle('hidden', !isHintRevealed);
+    practiceHint.innerHTML = isHintRevealed
+        ? `<strong>Hãy tự hỏi:</strong> ${escapeHtml(getPracticeHint(item))}`
+        : '';
+    quizProgressText.textContent = `${answeredCount}/${currentPracticeMessages.length}`;
+    quizProgressBar.style.width = `${answeredCount / currentPracticeMessages.length * 100}%`;
     quizSubmitHint.textContent = remainingCount
         ? `Còn ${remainingCount} câu chưa trả lời.`
         : 'Bác đã hoàn thành tất cả câu hỏi.';
@@ -1202,13 +1442,13 @@ function renderPracticeQuestion() {
     practiceScamBtn.setAttribute('aria-pressed', String(selectedAnswer === 'Lừa đảo'));
     practiceSafeBtn.setAttribute('aria-pressed', String(selectedAnswer === 'An toàn'));
     previousQuestionBtn.disabled = practiceIndex === 0;
-    nextQuestionBtn.disabled = practiceIndex === practiceMessages.length - 1;
-    submitQuizBtn.disabled = answeredCount !== practiceMessages.length;
+    nextQuestionBtn.disabled = practiceIndex === currentPracticeMessages.length - 1;
+    submitQuizBtn.disabled = answeredCount !== currentPracticeMessages.length;
     renderQuestionNavigator();
 }
 
 function goToQuestion(index) {
-    if (quizSubmitted || index < 0 || index >= practiceMessages.length) return;
+    if (quizSubmitted || index < 0 || index >= currentPracticeMessages.length) return;
     practiceIndex = index;
     renderPracticeQuestion();
 }
@@ -1219,48 +1459,71 @@ function answerPractice(answer) {
     renderPracticeQuestion();
 }
 
+function togglePracticeHint() {
+    if (quizSubmitted) return;
+    revealedPracticeHints[practiceIndex] = !revealedPracticeHints[practiceIndex];
+    renderPracticeQuestion();
+}
+
+function renderQuizReviewItem(item, userAnswer, index) {
+    const isCorrect = userAnswer === item.label;
+    return `<li class="quiz-review-item ${isCorrect ? 'is-correct' : 'is-incorrect'}">
+        <div class="quiz-review-heading">
+            <span class="quiz-review-number">Câu ${index + 1}</span>
+            <strong class="quiz-review-status">${isCorrect ? '✓ Đúng' : '× Chưa đúng'}</strong>
+        </div>
+        <blockquote class="quiz-review-question">${escapeHtml(item.text)}</blockquote>
+        <div class="quiz-review-answers">
+            ${isCorrect ? '' : `<p class="quiz-user-answer"><span>Bác đã chọn</span><b>${escapeHtml(userAnswer)}</b></p>`}
+            <p class="quiz-correct-answer">
+                <span>${isCorrect ? 'Bác đã chọn đúng' : 'Đáp án đúng'}</span>
+                <strong>${escapeHtml(item.label)}</strong>
+            </p>
+        </div>
+        <p class="quiz-review-explanation"><strong>Vì sao?</strong> ${escapeHtml(item.explanation)}</p>
+    </li>`;
+}
+
 function submitQuiz() {
     if (userAnswers.some(answer => answer === null)) return;
 
     quizSubmitted = true;
     const correctCount = userAnswers.reduce((total, answer, index) => (
-        total + Number(answer === practiceMessages[index].label)
+        total + Number(answer === currentPracticeMessages[index].label)
     ), 0);
-    const incorrectCount = practiceMessages.length - correctCount;
-    const missedLessons = practiceMessages
+    const incorrectCount = currentPracticeMessages.length - correctCount;
+    const missedLessons = currentPracticeMessages
         .filter((item, index) => userAnswers[index] !== item.label)
         .map(item => item.explanation)
         .slice(0, 3)
         .join(' ');
-    const reviewHtml = practiceMessages.map((item, index) => {
-        const isCorrect = userAnswers[index] === item.label;
-        return `<li class="quiz-review-item ${isCorrect ? 'is-correct' : 'is-incorrect'}">
-            Câu ${index + 1}: ${isCorrect ? 'Đúng' : `Chưa đúng — đáp án: ${escapeHtml(item.label)}`}
-        </li>`;
-    }).join('');
+    const reviewHtml = currentPracticeMessages
+        .map((item, index) => renderQuizReviewItem(item, userAnswers[index], index))
+        .join('');
     const advice = incorrectCount === 0
         ? 'Cô tâm lý: Bác làm rất tốt. Hãy tiếp tục giữ thói quen dừng lại và kiểm tra trước khi bấm vào liên kết lạ.'
         : incorrectCount > 3
             ? `Cô tâm lý: Bác đừng lo, đây là những chiêu thức rất dễ gây nhầm lẫn. Bác nên luyện lại phần này. ${missedLessons}`
             : `Cô tâm lý: Bác đã nhận ra nhiều dấu hiệu quan trọng. Với những câu còn nhầm, hãy bình tĩnh kiểm tra qua kênh chính thức trước khi làm theo. ${missedLessons}`;
-    const retryHtml = incorrectCount > 3
-        ? '<button type="button" id="retryQuizBtn" class="retry-quiz-btn">Luyện tập lại phần này</button>'
-        : '';
-
     quizWorkspace.classList.add('hidden');
     quizResults.classList.remove('hidden');
     quizResults.innerHTML = `
-        <h3>Kết quả bài kiểm tra</h3>
-        <p class="quiz-score-summary">Bác đạt ${correctCount}/${practiceMessages.length} câu đúng</p>
+        <h3>Kết quả bộ đề ${practiceSetNumber}</h3>
+        <p class="quiz-score-summary">Bác đạt ${correctCount}/${currentPracticeMessages.length} câu đúng</p>
+        <p class="quiz-review-intro">Xem lại từng câu bên dưới. <strong>Đáp án đúng luôn được in đậm.</strong></p>
         <ul class="quiz-review-list">${reviewHtml}</ul>
         <p class="quiz-advice">${advice}</p>
-        ${retryHtml}
+        <div class="quiz-result-actions">
+            <button type="button" id="retryQuizBtn" class="retry-quiz-btn">Làm lại bộ đề này</button>
+            <button type="button" id="nextQuizSetBtn" class="next-quiz-set-btn">Làm tiếp bộ đề mới →</button>
+        </div>
     `;
 }
 
 function resetQuiz() {
     practiceIndex = 0;
-    userAnswers.fill(null);
+    userAnswers = Array(currentPracticeMessages.length).fill(null);
+    revealedPracticeHints = Array(currentPracticeMessages.length).fill(false);
     quizSubmitted = false;
     quizResults.classList.add('hidden');
     quizResults.innerHTML = '';
@@ -1268,17 +1531,25 @@ function resetQuiz() {
     renderPracticeQuestion();
 }
 
+function startNextQuizSet() {
+    const previousQuestions = new Set(currentPracticeMessages.map(item => item.text));
+    currentPracticeMessages = createRandomPracticeSet(previousQuestions);
+    practiceSetNumber += 1;
+    resetQuiz();
+}
+
 const viewConfig = {
     checkerSection: { title: 'Kiểm tra tin nhắn', hash: 'kiem-tra' },
     practiceSection: { title: 'Luyện tập kỹ năng', hash: 'luyen-tap' },
     historySection: { title: 'Lịch sử kiểm tra', hash: 'lich-su' },
-    librarySection: { title: 'Thư viện lừa đảo', hash: 'thu-vien' }
+    librarySection: { title: 'Thư viện lừa đảo', hash: 'thu-vien' },
+    guideSection: { title: 'Hướng dẫn sử dụng', hash: 'huong-dan' }
 };
 
 function showView(viewId, updateHash = true) {
     if (!viewConfig[viewId]) return;
 
-    [checkerSection, practiceSection, historySection, librarySection].forEach(section => {
+    [checkerSection, practiceSection, historySection, librarySection, guideSection].forEach(section => {
         section.classList.toggle('hidden', section.id !== viewId);
     });
     categoryButtons.forEach(button => {
@@ -1296,12 +1567,158 @@ function showView(viewId, updateHash = true) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderLibrary(group = 'Tất cả') {
-    const groups = ['Tất cả', ...new Set(scamLibrary.map(item => item.group))];
-    libraryFilters.innerHTML = groups.map(item => `<button type="button" data-library-group="${escapeHtml(item)}" aria-pressed="${String(item === group)}">${escapeHtml(item)}</button>`).join('');
-    const visibleItems = group === 'Tất cả' ? scamLibrary : scamLibrary.filter(item => item.group === group);
-    libraryList.innerHTML = visibleItems.map(item => `<button type="button" class="library-item" data-library-id="${item.id}"><span>${escapeHtml(item.group)}</span><strong>${escapeHtml(item.title)}</strong></button>`).join('');
+function normalizeLibrarySearch(value) {
+    return String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLocaleLowerCase('vi')
+        .trim();
+}
+
+function getTrustedLibrarySourceUrl(value) {
+    try {
+        const url = new URL(String(value));
+        const isTrustedHost = TRUSTED_LIBRARY_SOURCE_HOSTS.some(hostname => (
+            url.hostname === hostname || url.hostname.endsWith(`.${hostname}`)
+        ));
+        return url.protocol === 'https:' && isTrustedHost ? url.href : '';
+    } catch {
+        return '';
+    }
+}
+
+function renderLibrarySourceLink(source, label = 'Xem bài gốc') {
+    const sourceUrl = getTrustedLibrarySourceUrl(source?.url);
+    if (!sourceUrl) return '';
+    const sourceTitle = source?.title || 'nguồn dẫn chứng';
+    return `<a class="library-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${label}: ${sourceTitle}`)}">${escapeHtml(label)} <span aria-hidden="true">↗</span></a>`;
+}
+
+function renderLibraryOverview() {
+    if (!libraryOverviewPanel) return;
+    libraryOverviewPanel.innerHTML = `
+        <div class="library-overview-number">
+            <span>Toàn cảnh tại Việt Nam</span>
+            <strong>${escapeHtml(libraryOverview.value)}</strong>
+        </div>
+        <div class="library-overview-copy">
+            <p>${escapeHtml(libraryOverview.detail)}</p>
+            <div>
+                <span>${escapeHtml(libraryOverview.source.publisher)} · ${escapeHtml(libraryOverview.source.publishedAt)}</span>
+                ${renderLibrarySourceLink(libraryOverview.source, 'Kiểm tra số liệu')}
+            </div>
+        </div>
+        <span class="library-reviewed">Nội dung rà soát ${escapeHtml(libraryOverview.reviewedAt)}</span>`;
+}
+
+function hideLibraryDetail(restoreFocus = false) {
     libraryDetail.classList.add('hidden');
+    libraryList.querySelectorAll('[data-library-id][aria-expanded="true"]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+    });
+    if (restoreFocus && lastLibraryTrigger?.isConnected) lastLibraryTrigger.focus();
+}
+
+function renderLibrary() {
+    const groups = ['Tất cả', ...new Set(scamLibrary.map(item => item.group))];
+    if (!groups.includes(currentLibraryGroup)) currentLibraryGroup = 'Tất cả';
+
+    libraryFilters.innerHTML = groups.map(group => {
+        const groupCount = group === 'Tất cả'
+            ? scamLibrary.length
+            : scamLibrary.filter(item => item.group === group).length;
+        return `<button type="button" data-library-group="${escapeHtml(group)}" aria-pressed="${String(group === currentLibraryGroup)}">${escapeHtml(group)} <span>${groupCount}</span></button>`;
+    }).join('');
+
+    const normalizedQuery = normalizeLibrarySearch(librarySearchQuery);
+    const visibleItems = scamLibrary.filter(item => {
+        const matchesGroup = currentLibraryGroup === 'Tất cả' || item.group === currentLibraryGroup;
+        const searchableText = normalizeLibrarySearch(JSON.stringify(item));
+        return matchesGroup && (!normalizedQuery || searchableText.includes(normalizedQuery));
+    });
+
+    libraryList.innerHTML = visibleItems.map(item => `
+        <button type="button" class="library-item" data-library-id="${escapeHtml(item.id)}" aria-controls="libraryDetail" aria-expanded="false">
+            <span class="library-item-topline">
+                <span class="library-item-group">${escapeHtml(item.group)}</span>
+                <span class="library-item-channel">${escapeHtml(item.channel)}</span>
+            </span>
+            <strong>${escapeHtml(item.title)}</strong>
+            <span class="library-item-summary">${escapeHtml(item.summary)}</span>
+            <span class="library-item-hook"><b>Mồi nhử</b>${escapeHtml(item.hook)}</span>
+            <span class="library-item-open">Xem tình huống và dẫn chứng <span aria-hidden="true">→</span></span>
+        </button>`).join('');
+
+    libraryResultCount.textContent = normalizedQuery || currentLibraryGroup !== 'Tất cả'
+        ? `Tìm thấy ${visibleItems.length} trong ${scamLibrary.length} tình huống`
+        : `${scamLibrary.length} tình huống đã có dẫn chứng`;
+    libraryEmpty.classList.toggle('hidden', visibleItems.length > 0);
+    hideLibraryDetail();
+}
+
+function renderLibraryDetail(item) {
+    const messages = item.example.map(message => `
+        <div class="library-message">
+            <div><strong>${escapeHtml(message.speaker)}</strong><time>${escapeHtml(message.time)}</time></div>
+            <p>${escapeHtml(message.text)}</p>
+        </div>`).join('');
+    const signs = item.signs.map(sign => `<li>${escapeHtml(sign)}</li>`).join('');
+    const actions = item.action.map(action => `<li>${escapeHtml(action)}</li>`).join('');
+    const sourceLink = renderLibrarySourceLink(item.evidence, 'Đọc nguồn chính thức');
+
+    libraryDetail.innerHTML = `
+        <button type="button" id="closeLibraryDetail">← Quay lại danh sách</button>
+        <div class="library-detail-heading">
+            <div>
+                <span class="library-detail-group">${escapeHtml(item.group)}</span>
+                <span class="library-detail-channel">${escapeHtml(item.channel)}</span>
+                <h3>${escapeHtml(item.title)}</h3>
+                <p>${escapeHtml(item.summary)}</p>
+            </div>
+            <div class="library-hook-card"><span>Mồi tâm lý</span><strong>${escapeHtml(item.hook)}</strong></div>
+        </div>
+        <div class="library-scenario">
+            <div class="library-scenario-intro">
+                <span>Mô phỏng an toàn</span>
+                <p><strong>Bối cảnh:</strong> ${escapeHtml(item.scenario)}</p>
+            </div>
+            <div class="library-phone">
+                <div class="library-phone-bar"><span aria-hidden="true"></span><strong>Tin nhắn mô phỏng</strong><span aria-hidden="true"></span></div>
+                <div class="library-chat">${messages}</div>
+            </div>
+        </div>
+        <div class="library-detail-grid">
+            <section class="library-signs">
+                <span class="library-detail-kicker">Nhìn ra cái bẫy</span>
+                <h4>Dấu hiệu đỏ</h4>
+                <ul>${signs}</ul>
+            </section>
+            <section class="library-actions">
+                <span class="library-detail-kicker">Làm ngay, theo thứ tự</span>
+                <h4>Cách xử lý an toàn</h4>
+                <ol>${actions}</ol>
+            </section>
+        </div>
+        <aside class="library-evidence">
+            <div class="library-evidence-heading">
+                <span>Dẫn chứng xã hội</span>
+                <strong>Đã đối chiếu nguồn</strong>
+            </div>
+            <blockquote>${escapeHtml(item.evidence.fact)}</blockquote>
+            <div class="library-evidence-source">
+                <div>
+                    <strong>${escapeHtml(item.evidence.publisher)}</strong>
+                    <span>Đăng ngày ${escapeHtml(item.evidence.publishedAt)}</span>
+                </div>
+                ${sourceLink}
+            </div>
+            <p>Ví dụ phía trên là tình huống mô phỏng tổng hợp, không phải lời nhắn nguyên văn trong vụ việc được dẫn nguồn.</p>
+        </aside>`;
+    libraryDetail.classList.remove('hidden');
+    libraryDetail.focus({ preventScroll: true });
+    libraryDetail.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function getHistory() {
@@ -1400,20 +1817,33 @@ clearHistoryBtn.addEventListener('click', () => {
 
 libraryFilters.addEventListener('click', event => {
     const button = event.target.closest('[data-library-group]');
-    if (button) renderLibrary(button.dataset.libraryGroup);
+    if (!button) return;
+    currentLibraryGroup = button.dataset.libraryGroup;
+    renderLibrary();
+});
+
+librarySearch.addEventListener('input', () => {
+    librarySearchQuery = librarySearch.value;
+    renderLibrary();
 });
 
 libraryList.addEventListener('click', event => {
     const button = event.target.closest('[data-library-id]');
     const item = scamLibrary.find(entry => entry.id === button?.dataset.libraryId);
     if (!item) return;
-    libraryDetail.innerHTML = `<button type="button" id="closeLibraryDetail">← Quay lại danh sách</button><span class="library-detail-group">${escapeHtml(item.group)}</span><h3>${escapeHtml(item.title)}</h3><div class="library-example"><strong>Ví dụ</strong><p>“${escapeHtml(item.example)}”</p></div><p><strong>Dấu hiệu:</strong> ${escapeHtml(item.signs)}</p><p><strong>Cách xử lý:</strong> ${escapeHtml(item.action)}</p>`;
-    libraryDetail.classList.remove('hidden');
-    libraryDetail.focus();
+    lastLibraryTrigger = button;
+    libraryList.querySelectorAll('[data-library-id]').forEach(itemButton => {
+        itemButton.setAttribute('aria-expanded', String(itemButton === button));
+    });
+    renderLibraryDetail(item);
 });
 
 libraryDetail.addEventListener('click', event => {
-    if (event.target.closest('#closeLibraryDetail')) libraryDetail.classList.add('hidden');
+    if (event.target.closest('#closeLibraryDetail')) hideLibraryDetail(true);
+});
+
+libraryDetail.addEventListener('keydown', event => {
+    if (event.key === 'Escape') hideLibraryDetail(true);
 });
 
 resultDiv.addEventListener('click', async event => {
@@ -1502,12 +1932,59 @@ voiceBtn.addEventListener('click', () => {
 categoryButtons.forEach(button => {
     button.addEventListener('click', () => showView(button.dataset.view));
 });
+guideFaq?.querySelectorAll('details').forEach(item => {
+    item.addEventListener('toggle', () => closeOtherFaqItems(item));
+});
+floatingGuideBtn.addEventListener('click', openFloatingGuideAssistant);
+guideChatCloseBtn.addEventListener('click', () => {
+    setGuideChatOpen(false);
+    floatingGuideBtn.focus();
+});
+guideChatForm.addEventListener('submit', event => {
+    event.preventDefault();
+    sendGuideQuestion(guideChatInput.value);
+});
+guideChatInput.addEventListener('input', () => {
+    guideChatCount.textContent = `${guideChatInput.value.length}/600 ký tự`;
+    if (guideChatInput.value.trim()) guideChatStatus.textContent = '';
+});
+guideChatPanel.addEventListener('click', event => {
+    const suggestion = event.target.closest('[data-guide-question]');
+    if (suggestion) sendGuideQuestion(suggestion.dataset.guideQuestion);
+});
+window.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && floatingGuideBtn.getAttribute('aria-expanded') === 'true') {
+        setGuideChatOpen(false);
+        floatingGuideBtn.focus();
+    }
+});
+guideSection.addEventListener('click', event => {
+    const destinationButton = event.target.closest('[data-guide-view]');
+    if (destinationButton) {
+        showView(destinationButton.dataset.guideView);
+        requestAnimationFrame(() => {
+            document.getElementById(destinationButton.dataset.guideFocus)?.focus();
+        });
+        return;
+    }
+
+    const accessibilityButton = event.target.closest('[data-guide-action]');
+    if (!accessibilityButton) return;
+    if (accessibilityButton.dataset.guideAction === 'font') fontSizeBtn.click();
+    if (accessibilityButton.dataset.guideAction === 'contrast') contrastBtn.click();
+    const settingName = accessibilityButton.dataset.guideAction === 'font' ? 'chữ lớn' : 'tương phản cao';
+    const enabled = accessibilityButton.dataset.guideAction === 'font'
+        ? document.body.classList.contains('large-text')
+        : document.body.classList.contains('high-contrast');
+    guideDisplayStatus.textContent = `Đã ${enabled ? 'bật' : 'tắt'} ${settingName}.`;
+});
 brandHome.addEventListener('click', event => {
     event.preventDefault();
     showView('checkerSection');
 });
 practiceScamBtn.addEventListener('click', () => answerPractice('Lừa đảo'));
 practiceSafeBtn.addEventListener('click', () => answerPractice('An toàn'));
+practiceHintBtn.addEventListener('click', togglePracticeHint);
 questionNavigator.addEventListener('click', event => {
     const button = event.target.closest('[data-question-index]');
     if (button) goToQuestion(Number(button.dataset.questionIndex));
@@ -1517,15 +1994,19 @@ nextQuestionBtn.addEventListener('click', () => goToQuestion(practiceIndex + 1))
 submitQuizBtn.addEventListener('click', submitQuiz);
 quizResults.addEventListener('click', event => {
     if (event.target.closest('#retryQuizBtn')) resetQuiz();
+    if (event.target.closest('#nextQuizSetBtn')) startNextQuizSet();
 });
 
 checkBtn.addEventListener('click', async () => {
     const text = smsInput.value.trim();
 
     if (!text) {
-        alert('Bác vui lòng dán nội dung tin nhắn cần kiểm tra.');
+        setInputValidationMessage('Bác chưa nhập nội dung. Hãy dán hoặc đọc tin nhắn cần kiểm tra vào ô phía trên.');
+        inputValidationMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        smsInput.focus();
         return;
     }
+    clearInputValidationMessage();
 
     if (countWords(text) > MAX_INPUT_WORDS) {
         alert('Nội dung dài quá 5.000 từ. Bác vui lòng rút ngắn trước khi kiểm tra.');
@@ -1631,6 +2112,11 @@ async function runSelfTests() {
             && contrastBtn.getAttribute('aria-pressed') === 'false'
     );
     setAccessibilityPreferences(previousAccessibilityPreferences);
+    setInputValidationMessage('Bác chưa nhập nội dung kiểm tra.');
+    assert('Cảnh báo nhập liệu hiển thị ngay trên màn hình', !inputValidationMessage.classList.contains('hidden')
+        && smsInput.getAttribute('aria-invalid') === 'true'
+        && inputValidationMessage.textContent.includes('chưa nhập'));
+    clearInputValidationMessage();
     const previousResultHtml = resultDiv.innerHTML;
     const previousCurrentResult = currentResult;
     renderAnalysis('Gia đình hẹn ăn cơm lúc 6 giờ.', {
@@ -1674,7 +2160,63 @@ async function runSelfTests() {
     assert('Yêu cầu OTP của công an là Nguy hiểm', applySafetyRules('Công an yêu cầu cung cấp mã OTP, nếu không sẽ bị bắt.', safeCaseAnalysis).muc_do_rui_ro === 'Nguy hiểm');
     assert('Cam kết lãi cao là Nguy hiểm', applySafetyRules('Cam kết lãi suất 20%/tháng. Nạp tiền ngay.', safeCaseAnalysis).muc_do_rui_ro === 'Nguy hiểm');
     assert('Phát hiện tiếng Trung và tiếng Nga', containsUnsupportedLanguage('你的訂單正在運送途中') && containsUnsupportedLanguage('Ваша подписка будет заблокирована'));
-    assert('Thư viện có đủ ví dụ và dấu hiệu', scamLibrary.length === 12 && scamLibrary.every(item => item.example && item.signs && item.action));
+    const randomPracticeSetProbe = createRandomPracticeSet();
+    const nextPracticeSetProbe = createRandomPracticeSet(new Set(randomPracticeSetProbe.map(item => item.text)));
+    assert('Ngân hàng luyện tập tạo bộ 10 câu ngẫu nhiên không trùng', practiceMessages.length === 25
+        && practiceMessages.filter(item => item.label === 'Lừa đảo').length === 13
+        && practiceMessages.filter(item => item.label === 'An toàn').length === 12
+        && randomPracticeSetProbe.length === PRACTICE_SET_SIZE
+        && new Set(randomPracticeSetProbe.map(item => item.text)).size === PRACTICE_SET_SIZE
+        && nextPracticeSetProbe.length === PRACTICE_SET_SIZE
+        && nextPracticeSetProbe.every(item => !randomPracticeSetProbe.includes(item)));
+    assert('Gợi ý luyện tập định hướng nhưng không lộ đáp án', Boolean(practiceHintBtn)
+        && practiceMessages.every(item => {
+            const hint = getPracticeHint(item);
+            return hint.length >= 40 && !/(Lừa đảo|An toàn)/u.test(hint);
+        })
+        && new Set(practiceMessages.map(item => getPracticeHint(item))).size === practiceMessages.length);
+    assert('Thư viện có đủ mô phỏng, hướng dẫn và nguồn chính thống', scamLibrary.length === 12 && scamLibrary.every(item => (
+        Array.isArray(item.example)
+        && item.example.length >= 2
+        && Array.isArray(item.signs)
+        && item.signs.length >= 3
+        && Array.isArray(item.action)
+        && item.action.length >= 3
+        && Boolean(getTrustedLibrarySourceUrl(item.evidence?.url))
+    )));
+    assert('Mục hướng dẫn có đủ bước và lối tắt chức năng', Boolean(guideSection)
+        && guideSection.querySelectorAll('.guide-step-list li').length === 4
+        && guideSection.querySelectorAll('[data-guide-view]').length >= 4
+        && [...guideSection.querySelectorAll('[data-guide-view]')].every(button => Boolean(viewConfig[button.dataset.guideView]))
+        && guideSection.querySelectorAll('[data-guide-action]').length === 2
+        && guideSection.querySelectorAll('.guide-faq details').length === 8);
+    assert('Trợ lý chăm sóc người dùng có khung trò chuyện giới hạn phạm vi', Boolean(guideChatForm)
+        && Boolean(guideChatCloseBtn)
+        && !guideSection.contains(guideChatPanel)
+        && floatingGuideBtn.getAttribute('aria-controls') === 'guideChatPanel'
+        && guideChatPanel.querySelectorAll('[data-guide-question]').length === 4
+        && buildGuideChatPrompt().includes('LICH_SU_TRO_CHUYEN_KHONG_TIN_CAY')
+        && guideChatInput.maxLength === 600);
+    const faqItems = [...guideFaq.querySelectorAll('details')];
+    faqItems[0].open = true;
+    faqItems[1].open = true;
+    closeOtherFaqItems(faqItems[1]);
+    assert('Hỏi đáp chỉ mở một câu trả lời tại một thời điểm', faqItems[1].open
+        && faqItems.every((item, index) => index === 1 || !item.open));
+    faqItems[0].open = true;
+    faqItems[1].open = false;
+    const quizReviewProbe = document.createElement('div');
+    const deliberatelyWrongAnswer = practiceMessages[0].label === 'Lừa đảo' ? 'An toàn' : 'Lừa đảo';
+    quizReviewProbe.innerHTML = [
+        renderQuizReviewItem(practiceMessages[0], deliberatelyWrongAnswer, 0),
+        renderQuizReviewItem(practiceMessages[5], practiceMessages[5].label, 5)
+    ].join('');
+    const reviewItems = [...quizReviewProbe.querySelectorAll('.quiz-review-item')];
+    assert('Kết quả luyện tập giữ câu hỏi và in đậm đáp án đúng', reviewItems.length === 2
+        && reviewItems.every((item, index) => item.querySelector('.quiz-review-question')?.textContent === practiceMessages[index === 0 ? 0 : 5].text)
+        && reviewItems.every(item => Boolean(item.querySelector('.quiz-correct-answer strong')))
+        && Boolean(reviewItems[0].querySelector('.quiz-user-answer'))
+        && !reviewItems[1].querySelector('.quiz-user-answer'));
     const edgeMessages = [
         'Đọc mã OTP cho tôi', 'Chuyển ngay tiền vào tài khoản an toàn', 'STK: 1234567890',
         'Làm ngay trong 5 phút nếu không sẽ bị khóa', 'Giữ bí mật, đừng gọi cho ai',
@@ -1742,11 +2284,13 @@ async function runSelfTests() {
     document.body.dataset.selfTest = passed === results.length ? 'passed' : 'failed';
 }
 
+prepareInitialPracticeSet();
 const initialView = Object.entries(viewConfig)
     .find(([, config]) => config.hash === window.location.hash.slice(1))?.[0] || 'checkerSection';
 showView(initialView, false);
 renderHistory();
 renderAiUsage();
+renderLibraryOverview();
 renderLibrary();
 setAccessibilityPreferences(getAccessibilityPreferences());
 setupSpeechRecognition();

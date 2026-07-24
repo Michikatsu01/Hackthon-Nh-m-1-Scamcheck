@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f7f9fc">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <title>ScamCheck - Kiểm tra lừa đảo</title>
-    <link rel="stylesheet" href="style.css?v=20260723-ai-log-table">
+    <link rel="stylesheet" href="style.css?v=20260724-floating-guide-panel">
 </head>
 <body>
     <div class="app-shell">
@@ -34,6 +34,10 @@
                     <span class="category-icon" aria-hidden="true">▤</span>
                     <span><strong>Thư viện</strong><small>12 kiểu lừa đảo phổ biến</small></span>
                 </button>
+                <button type="button" class="category-btn" data-view="guideSection">
+                    <span class="category-icon" aria-hidden="true">?</span>
+                    <span><strong>Hướng dẫn</strong><small>Cách dùng trang từng bước</small></span>
+                </button>
             </nav>
 
             <div class="sidebar-tip">
@@ -52,7 +56,10 @@
                     <span id="aiUsage" class="ai-usage" aria-live="polite">AI: 0/12 lượt</span>
                     <button type="button" id="fontSizeBtn" class="utility-btn" aria-pressed="false">Chữ lớn</button>
                     <button type="button" id="contrastBtn" class="utility-btn" aria-pressed="false">Tương phản cao</button>
-                    <div class="safety-status"><span></span> Hệ thống sẵn sàng</div>
+                    <div id="systemStatus" class="safety-status" role="status">
+                        <span aria-hidden="true"></span>
+                        <span id="systemStatusText">Đang kiểm tra máy chủ</span>
+                    </div>
                 </div>
             </header>
 
@@ -75,8 +82,12 @@
                             </div>
 
                             <label for="smsInput">Nội dung tin nhắn cần kiểm tra</label>
-                            <textarea id="smsInput" rows="7" maxlength="50000" placeholder="Dán tin nhắn, email hoặc nội dung đáng ngờ vào đây..."></textarea>
+                            <textarea id="smsInput" rows="7" maxlength="50000" aria-describedby="wordCount inputValidationMessage" aria-errormessage="inputValidationMessage" placeholder="Dán tin nhắn, email hoặc nội dung đáng ngờ vào đây..."></textarea>
                             <p id="wordCount" class="word-count" aria-live="polite">0/50.000 ký tự · 0/5.000 từ</p>
+                            <p id="inputValidationMessage" class="input-validation-message hidden" role="alert">
+                                <span aria-hidden="true">!</span>
+                                <span></span>
+                            </p>
                             <button type="button" id="voiceBtn" class="voice-btn" aria-pressed="false">🎙 Nhập bằng giọng nói</button>
                             <p id="voiceStatus" class="assistive-status" aria-live="polite"></p>
 
@@ -107,7 +118,7 @@
                     <div class="section-intro">
                         <span class="section-tag blue">Luyện tập kỹ năng</span>
                         <h2 id="practiceTitle">Bạn có nhận ra tin nhắn lừa đảo?</h2>
-                        <p>Hoàn thành 10 tình huống ngắn để hình thành thói quen nhận diện rủi ro.</p>
+                        <p>Mỗi bộ gồm 10 tình huống lấy ngẫu nhiên từ ngân hàng 25 câu để bác luyện nhiều lần mà không bị nhàm.</p>
                     </div>
                     <div class="practice-workspace">
                         <div id="quizWorkspace">
@@ -121,6 +132,12 @@
                                         <p id="practiceScore" class="practice-score" aria-live="polite"></p>
                                     </div>
                                     <div id="practiceQuestion" class="practice-question"></div>
+                                    <div class="practice-hint-area">
+                                        <button type="button" id="practiceHintBtn" class="practice-hint-btn" aria-expanded="false" aria-controls="practiceHint">
+                                            <span aria-hidden="true">💡</span> Xem gợi ý
+                                        </button>
+                                        <div id="practiceHint" class="practice-hint hidden" role="status" aria-live="polite"></div>
+                                    </div>
                                     <div id="practiceChoices" class="practice-choices" aria-label="Chọn đáp án">
                                         <button type="button" id="practiceScamBtn" class="practice-scam-btn"><span class="answer-letter" aria-hidden="true">A</span><span>Lừa đảo</span></button>
                                         <button type="button" id="practiceSafeBtn" class="practice-safe-btn"><span class="answer-letter" aria-hidden="true">B</span><span>An toàn</span></button>
@@ -166,7 +183,7 @@
                     </div>
                     <div class="content-card history-card">
                         <div class="history-heading"><div><h3>Các lần kiểm tra gần đây</h3><span>Dữ liệu chỉ lưu trên thiết bị này</span></div><button type="button" id="clearHistoryBtn" class="danger-outline-btn">Xoá toàn bộ</button></div>
-                        <div id="historyList" class="history-list"><p class="empty-state">Chưa có lịch sử kiểm tra.</p></div>
+                        <div id="historyList" class="history-list" tabindex="-1"><p class="empty-state">Chưa có lịch sử kiểm tra.</p></div>
                         <details class="ai-log-panel">
                             <summary>
                                 <span class="ai-log-summary-title">Nhật ký gọi AI trong phiên</span>
@@ -182,13 +199,204 @@
                     <div class="section-intro">
                         <span class="section-tag blue">Kiến thức phòng tránh</span>
                         <h2 id="libraryTitle">Thư viện kiểu lừa đảo</h2>
-                        <p>Lọc theo nhóm và bấm vào từng kiểu để xem dấu hiệu cùng cách xử lý.</p>
+                        <p>Xem một tình huống mô phỏng sát thực tế, dấu hiệu đỏ, việc cần làm ngay và dẫn chứng từ nguồn chính thống.</p>
                     </div>
+                    <aside id="libraryOverview" class="library-overview" aria-label="Toàn cảnh lừa đảo trực tuyến"></aside>
                     <div class="content-card library-card">
+                        <div class="library-toolbar">
+                            <label class="library-search" for="librarySearch">
+                                <span>Tìm tình huống</span>
+                                <input id="librarySearch" type="search" autocomplete="off" placeholder="Ví dụ: shipper, OTP, phạt nguội">
+                            </label>
+                            <p id="libraryResultCount" class="library-result-count" aria-live="polite"></p>
+                        </div>
+                        <p class="library-simulation-note">
+                            <strong>Mô phỏng an toàn:</strong> tên miền, tài khoản và danh tính trong ví dụ đã được làm giả hoặc che bớt. Nội dung không phải tin nhắn nguyên văn của nạn nhân.
+                        </p>
                         <div id="libraryFilters" class="library-filters" aria-label="Lọc kiểu lừa đảo"></div>
+                        <article id="libraryDetail" class="library-detail hidden" tabindex="-1" aria-live="polite"></article>
                         <div id="libraryList" class="library-list"></div>
-                        <article id="libraryDetail" class="library-detail hidden" aria-live="polite"></article>
+                        <div id="libraryEmpty" class="library-empty hidden" role="status">
+                            <strong>Chưa tìm thấy tình huống phù hợp.</strong>
+                            <span>Thử từ khóa ngắn hơn như “ngân hàng”, “shipper” hoặc “đầu tư”.</span>
+                        </div>
                     </div>
+                </section>
+
+                <section id="guideSection" class="view-section hidden" aria-labelledby="guideTitle">
+                    <div class="section-intro guide-intro">
+                        <span class="section-tag orange">Dùng trang thật dễ</span>
+                        <h2 id="guideTitle">Hướng dẫn sử dụng ScamCheck</h2>
+                        <p>Làm lần lượt từng bước bên dưới. Bác có thể bấm nút màu xanh để đi thẳng đến đúng chức năng.</p>
+                    </div>
+
+                    <div class="guide-memory" role="note" aria-label="Ba điều cần nhớ">
+                        <span class="guide-memory-icon" aria-hidden="true">!</span>
+                        <div>
+                            <strong>Trước khi thao tác, bác nhớ 3 điều</strong>
+                            <p>Không bấm đường dẫn lạ · Không đọc mã OTP · Không chuyển tiền theo yêu cầu qua điện thoại.</p>
+                        </div>
+                    </div>
+
+                    <div class="user-guide-layout">
+                        <section class="content-card guide-walkthrough" aria-labelledby="guideStepsTitle">
+                            <div class="guide-heading">
+                                <span aria-hidden="true">1–4</span>
+                                <div>
+                                    <p>Việc thường dùng nhất</p>
+                                    <h3 id="guideStepsTitle">Kiểm tra một tin nhắn đáng ngờ</h3>
+                                </div>
+                            </div>
+                            <ol class="guide-step-list">
+                                <li>
+                                    <span class="guide-step-number" aria-hidden="true">1</span>
+                                    <div><strong>Sao chép tin nhắn</strong><p>Nhấn giữ vào tin nhắn đáng ngờ rồi chọn “Sao chép”. Không bấm vào đường dẫn trong tin.</p></div>
+                                </li>
+                                <li>
+                                    <span class="guide-step-number" aria-hidden="true">2</span>
+                                    <div><strong>Mở mục “Kiểm tra tin”</strong><p>Dán nội dung vào ô lớn. Bác cũng có thể chọn “Nhập bằng giọng nói”.</p></div>
+                                </li>
+                                <li>
+                                    <span class="guide-step-number" aria-hidden="true">3</span>
+                                    <div><strong>Bấm “Phân tích ngay”</strong><p>Chờ vài giây để trang kiểm tra dấu hiệu giả mạo, thúc giục và yêu cầu chuyển tiền.</p></div>
+                                </li>
+                                <li>
+                                    <span class="guide-step-number" aria-hidden="true">4</span>
+                                    <div><strong>Làm theo phần “Hành động đề xuất”</strong><p>Nếu kết quả nguy hiểm, dừng liên lạc và kiểm tra lại qua kênh chính thức.</p></div>
+                                </li>
+                            </ol>
+                            <button type="button" class="guide-primary-action" data-guide-view="checkerSection" data-guide-focus="smsInput">
+                                Bắt đầu kiểm tra một tin nhắn <span aria-hidden="true">→</span>
+                            </button>
+                        </section>
+
+                        <aside class="content-card guide-accessibility" aria-labelledby="guideDisplayTitle">
+                            <span class="guide-accessibility-icon" aria-hidden="true">Aa</span>
+                            <h3 id="guideDisplayTitle">Chữ khó đọc?</h3>
+                            <p>Bác có thể đổi cách hiển thị ngay tại đây. Thiết lập sẽ được ghi nhớ trên thiết bị này.</p>
+                            <div class="guide-accessibility-actions">
+                                <button type="button" data-guide-action="font">Bật hoặc tắt chữ lớn</button>
+                                <button type="button" data-guide-action="contrast">Bật hoặc tắt tương phản cao</button>
+                            </div>
+                            <p id="guideDisplayStatus" class="assistive-status" aria-live="polite"></p>
+                            <p class="guide-assistance-note"><strong>Nếu vẫn khó thao tác:</strong> nhờ một người thân đáng tin cậy cùng xem màn hình. Không đưa mật khẩu, mã OTP hoặc quyền điều khiển điện thoại cho người lạ.</p>
+                        </aside>
+                    </div>
+
+                    <section class="content-card guide-more" aria-labelledby="guideMoreTitle">
+                        <div class="guide-more-heading">
+                            <div>
+                                <span class="section-tag blue">Tìm hiểu thêm</span>
+                                <h3 id="guideMoreTitle">Bác muốn làm việc gì?</h3>
+                            </div>
+                            <p>Chọn một ô để mở đúng phần cần dùng.</p>
+                        </div>
+                        <div class="guide-destination-grid">
+                            <button type="button" data-guide-view="librarySection" data-guide-focus="librarySearch">
+                                <span aria-hidden="true">▤</span>
+                                <strong>Xem các kiểu lừa đảo</strong>
+                                <small>Đọc tình huống thực tế và dấu hiệu nhận biết</small>
+                            </button>
+                            <button type="button" data-guide-view="practiceSection" data-guide-focus="practiceScamBtn">
+                                <span aria-hidden="true">✓</span>
+                                <strong>Luyện nhận biết</strong>
+                                <small>Mỗi bộ 10 câu ngẫu nhiên, có thể làm tiếp bộ mới</small>
+                            </button>
+                            <button type="button" data-guide-view="historySection" data-guide-focus="historyList">
+                                <span aria-hidden="true">↶</span>
+                                <strong>Xem kết quả cũ</strong>
+                                <small>Mở lại các tin đã kiểm tra trên thiết bị này</small>
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="guide-faq" aria-labelledby="guideFaqTitle">
+                        <div class="guide-faq-heading">
+                            <div>
+                                <span class="section-tag blue">Hỏi đáp</span>
+                                <h3 id="guideFaqTitle">Những câu hỏi thường gặp</h3>
+                            </div>
+                            <p>Khi bác nhận được tin nhắn, đường link hoặc email đáng ngờ, hãy mở câu hỏi phù hợp bên dưới.</p>
+                        </div>
+
+                        <details open>
+                            <summary>ScamCheck giúp bác làm được gì?</summary>
+                            <div class="guide-faq-answer">
+                                <p>ScamCheck giúp bác kiểm tra nhanh nội dung tin nhắn, đường link hoặc email đáng ngờ trước khi trả lời, bấm link hay chuyển tiền.</p>
+                                <p>Trang sẽ cho biết mức rủi ro, chỉ ra các chi tiết cần chú ý và đề xuất ba việc nên làm tiếp theo bằng tiếng Việt dễ hiểu.</p>
+                                <p class="faq-callout"><strong>Mục đích chính:</strong> giúp bác dừng lại, có thêm thời gian xác minh và đưa ra quyết định bình tĩnh hơn.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>“An toàn”, “Nghi ngờ” và “Nguy hiểm” nghĩa là gì?</summary>
+                            <div class="guide-faq-answer">
+                                <ul class="faq-risk-levels">
+                                    <li><strong class="faq-safe">An toàn:</strong> chưa phát hiện dấu hiệu lừa đảo rõ ràng. Nếu nội dung liên quan đến tiền hoặc thông tin cá nhân, bác vẫn nên kiểm tra lại người gửi.</li>
+                                    <li><strong class="faq-suspicious">Nghi ngờ:</strong> có chi tiết chưa xác minh được, như đường link lạ, lời hứa quá hấp dẫn hoặc yêu cầu làm gấp. Bác nên hỏi người thân và liên hệ tổ chức qua kênh chính thức.</li>
+                                    <li><strong class="faq-dangerous">Nguy hiểm:</strong> có nhiều dấu hiệu lừa đảo. Bác không nên trả lời, bấm link, chuyển tiền hoặc cung cấp mã OTP.</li>
+                                </ul>
+                                <p>Kết quả là cảnh báo hỗ trợ, không phải kết luận điều tra chính thức.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Nếu bác đã bấm vào đường link lạ thì sao?</summary>
+                            <div class="guide-faq-answer">
+                                <p>Hãy đóng trang đó và không nhập thêm thông tin. Chỉ bấm vào link chưa có nghĩa là chắc chắn mất tiền, vì vậy bác nên bình tĩnh nhớ lại mình đã cung cấp những gì.</p>
+                                <ol>
+                                    <li>Nếu đã nhập mật khẩu, hãy tự mở ứng dụng hoặc trang web chính thức để đổi mật khẩu và đăng xuất thiết bị lạ.</li>
+                                    <li>Nếu đã nhập OTP, thông tin thẻ hoặc tài khoản ngân hàng, hãy gọi ngay số hỗ trợ in trên thẻ hoặc trong ứng dụng ngân hàng.</li>
+                                    <li>Chụp lại màn hình và giữ đường link để cung cấp cho ngân hàng hoặc cơ quan chức năng khi cần.</li>
+                                </ol>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Nếu bác đã chuyển tiền thì cần làm gì?</summary>
+                            <div class="guide-faq-answer">
+                                <p>Gọi ngân hàng càng sớm càng tốt để yêu cầu tra soát và hỗ trợ chặn giao dịch. Chuẩn bị sẵn số tiền, thời gian chuyển, tài khoản nhận và mã giao dịch.</p>
+                                <p>Giữ lại tin nhắn, biên lai, tên tài khoản và lịch sử cuộc gọi rồi trình báo cơ quan công an để được hướng dẫn.</p>
+                                <p class="faq-callout faq-callout-danger"><strong>Không chuyển thêm tiền</strong> dù người lạ nói đó là phí hoàn tiền, phí mở khóa hoặc cách lấy lại khoản tiền cũ.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Có nên cung cấp mã OTP cho người khác không?</summary>
+                            <div class="guide-faq-answer">
+                                <p><strong>Không.</strong> Bác tuyệt đối không đọc, chụp hoặc gửi mã OTP, mật khẩu, mã PIN hay số bảo mật phía sau thẻ cho người khác.</p>
+                                <p>Ngân hàng, công an hoặc nhân viên giao hàng thật không yêu cầu bác đọc OTP qua điện thoại hay tin nhắn. Nếu ai đó thúc giục, hãy dừng liên lạc và tự gọi đơn vị đó bằng số chính thức.</p>
+                                <p>Nếu đã lỡ cung cấp mã, hãy khóa thẻ hoặc tài khoản và gọi ngân hàng ngay.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Lịch sử kiểm tra có bị gửi đi nơi khác không?</summary>
+                            <div class="guide-faq-answer">
+                                <p>Lịch sử hiển thị trong mục “Lịch sử” được lưu bằng trình duyệt trên thiết bị bác đang sử dụng. Thiết bị khác không tự nhìn thấy các kết quả này.</p>
+                                <p>ScamCheck không yêu cầu tài khoản đăng nhập. Bác có thể xóa từng kết quả hoặc xóa toàn bộ; lịch sử cũng có thể mất khi dữ liệu trình duyệt bị xóa.</p>
+                                <p class="faq-callout"><strong>Lưu ý:</strong> nội dung bác bấm “Phân tích ngay” vẫn cần được gửi tới dịch vụ phân tích để tạo kết quả mới.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Khi nào bác nên hỏi người thân hoặc ngân hàng?</summary>
+                            <div class="guide-faq-answer">
+                                <p>Hãy hỏi ngay khi tin nhắn có đường link lạ, xin OTP, yêu cầu chuyển tiền, dọa khóa tài khoản, thúc giục làm gấp hoặc bắt bác giữ bí mật.</p>
+                                <p>Trước một hành động tài chính chưa chắc chắn, bác nên gọi người thân đáng tin cậy. Khi xác minh với ngân hàng, chỉ dùng số in trên thẻ, trong ứng dụng hoặc trên trang web chính thức.</p>
+                                <p>Không gọi số điện thoại được gửi kèm trong chính tin nhắn đáng ngờ.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>ScamCheck có thay thế công an hoặc ngân hàng không?</summary>
+                            <div class="guide-faq-answer">
+                                <p>Không. ScamCheck là công cụ giáo dục giúp nhận biết sớm dấu hiệu rủi ro; kết quả phân tích không phải kết luận chính thức.</p>
+                                <p>Trang không thể khóa tài khoản, thu hồi giao dịch hoặc xác định chắc chắn danh tính người gửi. Khi bị mất tiền, đe dọa hoặc lộ tài khoản, bác cần liên hệ ngay ngân hàng và cơ quan công an.</p>
+                                <p class="faq-callout"><strong>Hãy ưu tiên</strong> hướng dẫn của các đơn vị chính thức nếu hướng dẫn đó khác với gợi ý trên trang.</p>
+                            </div>
+                        </details>
+                    </section>
                 </section>
             </main>
 
@@ -196,10 +404,49 @@
         </div>
     </div>
 
+    <aside id="guideChatPanel" class="guide-chat-panel hidden" aria-labelledby="floatingGuideTitle">
+        <header class="floating-guide-panel-heading">
+            <div>
+                <span class="floating-panel-avatar" aria-hidden="true">AI</span>
+                <span><strong id="floatingGuideTitle">Trợ lý hướng dẫn</strong><small>Hỗ trợ cách dùng ScamCheck</small></span>
+            </div>
+            <button type="button" id="guideChatCloseBtn" aria-label="Đóng Trợ lý hướng dẫn">×</button>
+        </header>
+        <p class="guide-chat-privacy">
+            <strong>Không gửi thông tin bí mật:</strong> OTP, mật khẩu, số thẻ hoặc ảnh căn cước.
+        </p>
+        <div id="guideChatMessages" class="guide-chat-messages" role="log" aria-live="polite" aria-relevant="additions">
+            <article class="guide-chat-message is-assistant">
+                <span aria-hidden="true">AI</span>
+                <p>Cháu có thể hướng dẫn bác kiểm tra tin nhắn, dùng giọng nói, luyện tập, xem lịch sử hoặc chỉnh chữ lớn. Bác đang cần làm việc gì?</p>
+            </article>
+        </div>
+        <div class="guide-chat-suggestions" aria-label="Câu hỏi gợi ý">
+            <button type="button" data-guide-question="Làm sao để kiểm tra một tin nhắn đáng ngờ?">Kiểm tra tin nhắn</button>
+            <button type="button" data-guide-question="Làm sao bật chữ lớn và tương phản cao?">Chỉnh dễ đọc</button>
+            <button type="button" data-guide-question="Làm sao dùng gợi ý trong phần luyện tập?">Luyện tập</button>
+            <button type="button" data-guide-question="Làm sao xem hoặc xóa lịch sử kiểm tra?">Lịch sử</button>
+        </div>
+        <form id="guideChatForm" class="guide-chat-form">
+            <label for="guideChatInput">Câu hỏi của bác</label>
+            <textarea id="guideChatInput" rows="2" maxlength="600" placeholder="Ví dụ: Cách dán tin nhắn…"></textarea>
+            <div class="guide-chat-form-footer">
+                <span id="guideChatCount">0/600 ký tự</span>
+                <button type="submit" id="guideChatSendBtn">Gửi</button>
+            </div>
+            <p id="guideChatStatus" class="assistive-status" role="status" aria-live="polite"></p>
+        </form>
+    </aside>
+
+    <button type="button" id="floatingGuideBtn" class="floating-guide-assistant" aria-label="Mở Trợ lý hướng dẫn" aria-expanded="false" aria-controls="guideChatPanel">
+        <span class="floating-guide-logo" aria-hidden="true">AI</span>
+        <span class="floating-guide-label">Trợ lý hướng dẫn</span>
+    </button>
+
     <script src="frontend-config.js"></script>
     <script src="verified-hotlines.js"></script>
     <script src="organization-catalog.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script type="module" src="app.js?v=20260723-ai-log-table"></script>
+    <script type="module" src="app.js?v=20260724-floating-guide-panel"></script>
 </body>
 </html>
