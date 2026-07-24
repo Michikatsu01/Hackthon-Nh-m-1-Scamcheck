@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f7f9fc">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <title>ScamCheck - Kiểm tra lừa đảo</title>
-    <link rel="stylesheet" href="style.css?v=20260724-remove-contrast">
+    <link rel="stylesheet" href="style.css?v=20260724-messenger-guide">
 </head>
 <body>
     <div class="app-shell">
@@ -406,33 +406,49 @@
         <header class="floating-guide-panel-heading">
             <div>
                 <span class="floating-panel-avatar" aria-hidden="true">AI</span>
-                <span><strong id="floatingGuideTitle">Trợ lý hướng dẫn</strong><small>Hỗ trợ cách dùng ScamCheck</small></span>
+                <span>
+                    <strong id="floatingGuideTitle">Trợ lý hướng dẫn</strong>
+                    <small><i aria-hidden="true"></i>Sẵn sàng hỗ trợ bác</small>
+                </span>
             </div>
             <button type="button" id="guideChatCloseBtn" aria-label="Đóng Trợ lý hướng dẫn">×</button>
         </header>
-        <p class="guide-chat-privacy">
-            <strong>Không gửi thông tin bí mật:</strong> OTP, mật khẩu, số thẻ hoặc ảnh căn cước.
-        </p>
         <div id="guideChatMessages" class="guide-chat-messages" role="log" aria-live="polite" aria-relevant="additions">
             <article class="guide-chat-message is-assistant">
                 <span aria-hidden="true">AI</span>
-                <p>Cháu có thể hướng dẫn bác kiểm tra tin nhắn, dùng giọng nói, luyện tập, xem lịch sử hoặc chỉnh chữ lớn. Bác đang cần làm việc gì?</p>
+                <p>Cháu có thể mở đúng chức năng hoặc hướng dẫn bác từng bước. Bác chọn thao tác nhanh bên dưới hoặc nhập điều bác đang cần.</p>
             </article>
         </div>
-        <div class="guide-chat-suggestions" aria-label="Câu hỏi gợi ý">
-            <button type="button" data-guide-question="Làm sao để kiểm tra một tin nhắn đáng ngờ?">Kiểm tra tin nhắn</button>
-            <button type="button" data-guide-question="Làm sao bật chữ lớn?">Chỉnh dễ đọc</button>
-            <button type="button" data-guide-question="Làm sao dùng gợi ý trong phần luyện tập?">Luyện tập</button>
-            <button type="button" data-guide-question="Làm sao xem hoặc xóa lịch sử kiểm tra?">Lịch sử</button>
+        <div class="guide-chat-suggestions" aria-labelledby="guideQuickActionsTitle">
+            <p id="guideQuickActionsTitle">Thao tác nhanh</p>
+            <div>
+                <button type="button" data-guide-question="Mở phần kiểm tra tin nhắn">
+                    <span aria-hidden="true">⌕</span><span><strong>Kiểm tra tin</strong><small>Dán nội dung đáng ngờ</small></span>
+                </button>
+                <button type="button" data-guide-question="Mở phần luyện tập">
+                    <span aria-hidden="true">✓</span><span><strong>Luyện tập</strong><small>Làm bộ 10 câu</small></span>
+                </button>
+                <button type="button" data-guide-question="Mở thư viện">
+                    <span aria-hidden="true">▤</span><span><strong>Thư viện</strong><small>Xem các kiểu lừa đảo</small></span>
+                </button>
+                <button type="button" data-guide-question="Mở lịch sử">
+                    <span aria-hidden="true">↶</span><span><strong>Lịch sử</strong><small>Mở kết quả đã lưu</small></span>
+                </button>
+            </div>
         </div>
         <form id="guideChatForm" class="guide-chat-form">
-            <label for="guideChatInput">Câu hỏi của bác</label>
-            <textarea id="guideChatInput" rows="2" maxlength="600" placeholder="Ví dụ: Cách dán tin nhắn…"></textarea>
-            <div class="guide-chat-form-footer">
-                <span id="guideChatCount">0/600 ký tự</span>
-                <button type="submit" id="guideChatSendBtn">Gửi</button>
+            <label class="visually-hidden" for="guideChatInput">Bác cần trợ giúp việc gì?</label>
+            <div class="guide-chat-composer">
+                <textarea id="guideChatInput" rows="1" maxlength="5000" placeholder="Nhập tin nhắn…"></textarea>
+                <button type="submit" id="guideChatSendBtn" aria-label="Gửi tin nhắn">
+                    <span class="visually-hidden">Gửi tin nhắn</span><span aria-hidden="true">➤</span>
+                </button>
             </div>
             <p id="guideChatStatus" class="assistive-status" role="status" aria-live="polite"></p>
+            <div class="guide-chat-form-footer">
+                <span><b aria-hidden="true">↵</b> Enter để gửi</span>
+                <span id="guideChatCount">0/5.000</span>
+            </div>
         </form>
     </aside>
 
@@ -445,6 +461,6 @@
     <script src="verified-hotlines.js"></script>
     <script src="organization-catalog.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script type="module" src="app.js?v=20260724-remove-contrast"></script>
+    <script type="module" src="app.js?v=20260724-guide-stays-open"></script>
 </body>
 </html>

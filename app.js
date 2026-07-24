@@ -216,7 +216,14 @@ function setGuideChatOpen(isOpen) {
     floatingGuideBtn.setAttribute('aria-expanded', String(isOpen));
     floatingGuideBtn.setAttribute('aria-label', isOpen ? 'Đóng Trợ lý hướng dẫn' : 'Mở Trợ lý hướng dẫn');
     floatingGuideBtn.classList.toggle('is-active', isOpen);
-    if (isOpen) requestAnimationFrame(() => guideChatInput.focus());
+    if (isOpen) {
+        requestAnimationFrame(() => {
+            const focusTarget = window.matchMedia('(max-width: 580px)').matches
+                ? guideChatCloseBtn
+                : guideChatInput;
+            focusTarget.focus();
+        });
+    }
 }
 
 function openFloatingGuideAssistant() {
@@ -234,6 +241,11 @@ function appendGuideChatMessage(role, text) {
     article.append(badge, message);
     guideChatMessages.append(article);
     article.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function resizeGuideChatInput() {
+    guideChatInput.style.height = 'auto';
+    guideChatInput.style.height = `${Math.min(guideChatInput.scrollHeight, 140)}px`;
 }
 
 function buildGuideChatPrompt() {
@@ -254,8 +266,78 @@ function normalizeGuideReply(value) {
         .slice(0, 1800);
 }
 
+function normalizeGuideCommand(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLocaleLowerCase('vi')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getGuideNavigationIntent(question) {
+    const normalized = normalizeGuideCommand(question);
+    const destinations = [
+        { viewId: 'checkerSection', label: 'Kiểm tra tin nhắn', pattern: /\bkiem tra tin(?: nhan)?\b/ },
+        { viewId: 'practiceSection', label: 'Luyện tập', pattern: /\b(?:luyen tap|luyen ky nang)\b/ },
+        { viewId: 'historySection', label: 'Lịch sử', pattern: /\blich su\b/ },
+        { viewId: 'librarySection', label: 'Thư viện', pattern: /\bthu vien\b/ },
+        { viewId: 'guideSection', label: 'Hướng dẫn', pattern: /\bhuong dan\b/ }
+    ];
+    const destination = destinations.find(item => item.pattern.test(normalized));
+    if (!destination) return null;
+
+    const asksToNavigate = /\b(?:mo|vao|den|chuyen|dua|truy cap|di den|di toi)\b/.test(normalized)
+        || /\bmuon\s+(?:xem|vao|mo|den|lam)\b/.test(normalized)
+        || /\bcho\s+(?:toi|bac|minh)\s+(?:den|vao|xem|mo)\b/.test(normalized);
+    return asksToNavigate ? destination : null;
+}
+
+function extractGuideCheckContent(question) {
+    const raw = String(question || '').trim();
+    const delimiterIndex = raw.search(/[:：\n]/);
+    if (delimiterIndex > 0) {
+        const command = normalizeGuideCommand(raw.slice(0, delimiterIndex));
+        const content = raw.slice(delimiterIndex + 1).trim();
+        if (content && command.length <= 180 && /\b(?:kiem tra|phan tich|xem giup)\b/.test(command)) {
+            return content;
+        }
+    }
+
+    const directCommand = raw.match(
+        /^(?:hãy\s+|vui lòng\s+)?(?:kiểm tra|phân tích|xem giúp)(?:\s+(?:giúp\s+)?(?:bác|tôi|mình))?(?:\s+(?:tin nhắn|tin|email|đường link|link|nội dung))?(?:\s+này)?\s+([\s\S]+)$/iu
+    );
+    const content = directCommand?.[1]?.trim() || '';
+    if (!content || /^(?:như thế nào|thế nào|ra sao|đáng ngờ)\??$/iu.test(content)) return '';
+    return content;
+}
+
+function handleGuideLocalRequest(question) {
+    const checkContent = extractGuideCheckContent(question);
+    if (checkContent) {
+        showView('checkerSection');
+        smsInput.value = checkContent.slice(0, MAX_INPUT_CHARACTERS);
+        clearInputValidationMessage();
+        updateWordCount();
+        resultContainer.classList.add('hidden');
+        requestAnimationFrame(() => {
+            smsInput.focus();
+            smsInput.setSelectionRange(smsInput.value.length, smsInput.value.length);
+        });
+        return 'Cháu đã chép nội dung vào ô Kiểm tra tin nhắn. Bác xem lại nội dung rồi bấm “Phân tích ngay” để nhận kết quả.';
+    }
+
+    const destination = getGuideNavigationIntent(question);
+    if (!destination) return '';
+    showView(destination.viewId);
+    return `Cháu đã mở phần ${destination.label} cho bác. Bác có thể bắt đầu sử dụng ngay trên màn hình.`;
+}
+
 async function sendGuideQuestion(question) {
-    const cleanQuestion = String(question || '').trim().slice(0, 600);
+    const rawQuestion = String(question || '').trim().slice(0, 5000);
+    const cleanQuestion = rawQuestion.slice(0, 600);
     if (!cleanQuestion || guideChatPending) {
         if (!cleanQuestion) {
             guideChatStatus.textContent = 'Bác hãy nhập một câu hỏi về cách sử dụng ScamCheck.';
@@ -265,15 +347,30 @@ async function sendGuideQuestion(question) {
     }
 
     guideChatPending = true;
+    guideChatPanel.setAttribute('aria-busy', 'true');
     guideChatSendBtn.disabled = true;
+    guideChatSendBtn.setAttribute('aria-label', 'Đang gửi tin nhắn');
+    guideChatSendBtn.innerHTML = '<span class="visually-hidden">Đang gửi tin nhắn</span><span aria-hidden="true">…</span>';
     guideChatInput.disabled = true;
     guideChatStatus.textContent = 'Trợ lý đang đọc câu hỏi của bác…';
-    appendGuideChatMessage('user', cleanQuestion);
-    guideChatHistory.push({ role: 'user', text: cleanQuestion });
+    appendGuideChatMessage('user', rawQuestion);
+    guideChatHistory.push({ role: 'user', text: rawQuestion });
     guideChatInput.value = '';
-    guideChatCount.textContent = '0/600 ký tự';
+    guideChatCount.textContent = '0/5.000';
+    resizeGuideChatInput();
+    let localActionHandled = false;
 
     try {
+        const localReply = handleGuideLocalRequest(rawQuestion);
+        if (localReply) {
+            localActionHandled = true;
+            appendGuideChatMessage('assistant', localReply);
+            guideChatHistory.push({ role: 'assistant', text: localReply });
+            guideChatHistory = guideChatHistory.slice(-8);
+            guideChatStatus.textContent = 'Trợ lý đã thực hiện yêu cầu của bác.';
+            return;
+        }
+
         const response = await generateContentWithFallback({
             role: 'guide',
             purpose: 'Trợ lý hướng dẫn',
@@ -291,9 +388,12 @@ async function sendGuideQuestion(question) {
         guideChatStatus.textContent = getAiErrorMessage(error);
     } finally {
         guideChatPending = false;
+        guideChatPanel.removeAttribute('aria-busy');
         guideChatSendBtn.disabled = false;
+        guideChatSendBtn.setAttribute('aria-label', 'Gửi tin nhắn');
+        guideChatSendBtn.innerHTML = '<span class="visually-hidden">Gửi tin nhắn</span><span aria-hidden="true">➤</span>';
         guideChatInput.disabled = false;
-        guideChatInput.focus();
+        if (!localActionHandled) guideChatInput.focus();
     }
 }
 
@@ -1935,8 +2035,16 @@ guideChatForm.addEventListener('submit', event => {
     sendGuideQuestion(guideChatInput.value);
 });
 guideChatInput.addEventListener('input', () => {
-    guideChatCount.textContent = `${guideChatInput.value.length}/600 ký tự`;
+    guideChatCount.textContent = `${guideChatInput.value.length.toLocaleString('vi-VN')}/5.000`;
+    resizeGuideChatInput();
     if (guideChatInput.value.trim()) guideChatStatus.textContent = '';
+});
+guideChatInput.addEventListener('focus', () => guideChatPanel.classList.add('is-composing'));
+guideChatInput.addEventListener('blur', () => guideChatPanel.classList.remove('is-composing'));
+guideChatInput.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    guideChatForm.requestSubmit();
 });
 guideChatPanel.addEventListener('click', event => {
     const suggestion = event.target.closest('[data-guide-question]');
@@ -2182,7 +2290,19 @@ async function runSelfTests() {
         && floatingGuideBtn.getAttribute('aria-controls') === 'guideChatPanel'
         && guideChatPanel.querySelectorAll('[data-guide-question]').length === 4
         && buildGuideChatPrompt().includes('LICH_SU_TRO_CHUYEN_KHONG_TIN_CAY')
-        && guideChatInput.maxLength === 600);
+        && guideChatInput.maxLength === 5000);
+    assert('Trợ lý nhận đúng yêu cầu mở các danh mục', [
+        ['Mở phần kiểm tra tin nhắn', 'checkerSection'],
+        ['Mở phần luyện tập', 'practiceSection'],
+        ['Cho bác đến lịch sử', 'historySection'],
+        ['Chuyển sang thư viện', 'librarySection'],
+        ['Bác muốn xem hướng dẫn', 'guideSection']
+    ].every(([question, viewId]) => getGuideNavigationIntent(question)?.viewId === viewId));
+    assert('Trợ lý không tự chuyển trang với câu hỏi chỉ xin chỉ dẫn',
+        getGuideNavigationIntent('Làm sao dùng gợi ý trong phần luyện tập?') === null);
+    assert('Trợ lý tách đúng tin nhắn cần đưa vào ô kiểm tra',
+        extractGuideCheckContent('Kiểm tra tin này: Nhân viên ngân hàng cần mã OTP.') === 'Nhân viên ngân hàng cần mã OTP.'
+        && extractGuideCheckContent('Làm sao để kiểm tra một tin nhắn đáng ngờ?') === '');
     const faqItems = [...guideFaq.querySelectorAll('details')];
     faqItems[0].open = true;
     faqItems[1].open = true;
