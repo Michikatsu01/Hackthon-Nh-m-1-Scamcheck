@@ -488,16 +488,38 @@ footer { padding: 22px 30px 30px; color: var(--muted); font-size: .72rem; text-a
 .history-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
 .history-delete-btn { min-width: 64px; border: 1px solid; border-radius: 10px; background: #fff7f7; font-weight: 800; }
 .ai-log-panel { margin-top: 24px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfe; }
-.ai-log-panel summary { display: flex; min-height: 60px; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; color: var(--navy); font-weight: 800; list-style: none; }
-.ai-log-panel summary::-webkit-details-marker { display: none; }
-.ai-log-panel summary::before { color: #64748b; content: "›"; font-size: 1.45em; line-height: 1; transition: transform .18s ease; }
-.ai-log-panel[open] summary::before { transform: rotate(90deg); }
+.ai-log-panel > summary { display: flex; min-height: 60px; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; color: var(--navy); font-weight: 800; list-style: none; }
+.ai-log-panel > summary::-webkit-details-marker { display: none; }
+.ai-log-panel > summary::before { color: #64748b; content: "›"; font-size: 1.45em; line-height: 1; transition: transform .18s ease; }
+.ai-log-panel[open] > summary::before { transform: rotate(90deg); }
 .ai-log-summary-title { min-width: 0; }
 .ai-log-count { flex: 0 0 auto; margin-left: auto; padding: 5px 9px; border-radius: 999px; background: #eaf2ff; color: #2458af; font-size: .75em; font-weight: 800; white-space: nowrap; }
 .ai-log-help { margin: 0; padding: 0 18px 14px 45px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .86em; }
 #aiLogList { padding: 16px; }
+.ai-log-flow { margin-bottom: 16px; padding: 16px; border: 1px solid #d8e3f1; border-radius: 13px; background: linear-gradient(145deg, #f7faff, #fff); }
+.ai-log-flow-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.ai-log-flow-heading > div:first-child > span { display: block; margin-bottom: 3px; color: #52709b; font-size: .7em; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.ai-log-flow-heading strong { color: var(--navy); }
+.ai-log-flow-stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.ai-log-flow-stats span { padding: 6px 9px; border-radius: 999px; background: #eaf1fb; color: #4e617a; font-size: .72em; white-space: nowrap; }
+.ai-log-flow-stats span.is-success { background: #e5f7ef; color: #087a55; }
+.ai-log-flow-stats span.is-error { background: #fff0f0; color: #a12c2c; }
+.ai-log-flow-stats b { margin-right: 3px; }
+.ai-log-flow-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.ai-log-flow-list li { display: grid; grid-template-columns: 30px minmax(180px, 1.7fr) 22px minmax(120px, .85fr) 22px minmax(94px, .65fr); align-items: center; gap: 6px; }
+.ai-flow-order { display: grid; width: 28px; height: 28px; place-items: center; border: 2px solid #8fb2df; border-radius: 50%; background: #fff; color: #2458af; font-size: .72em; font-weight: 900; }
+.ai-flow-node { min-width: 0; padding: 9px 11px; border: 1px solid #d5dfeb; border-radius: 10px; background: #fff; }
+.ai-flow-node small { display: block; margin-bottom: 3px; color: #718096; font-size: .68em; }
+.ai-flow-node strong { display: block; overflow: hidden; color: #31445f; font-size: .78em; text-overflow: ellipsis; white-space: nowrap; }
+.ai-flow-node.is-role { border-color: #bed4f0; background: #f1f6fd; }
+.ai-log-flow-list li.is-success .ai-flow-node.is-result { border-color: #a9ddca; background: #ebf8f3; }
+.ai-log-flow-list li.is-success .ai-flow-node.is-result strong { color: #087a55; }
+.ai-log-flow-list li.is-error .ai-flow-node.is-result { border-color: #efb9b9; background: #fff2f2; }
+.ai-log-flow-list li.is-error .ai-flow-node.is-result strong { color: #a12c2c; }
+.ai-flow-arrow { color: #8ba0ba; font-weight: 900; text-align: center; }
+.ai-log-flow-note { margin: 11px 0 0; color: #68788e; font-size: .72em; text-align: right; }
 .ai-log-table-wrap { max-height: 380px; overflow: auto; border: 1px solid #dce4ef; border-radius: 11px; background: #fff; }
-.ai-log-table { width: 100%; min-width: 760px; border-spacing: 0; border-collapse: separate; color: var(--ink); text-align: left; }
+.ai-log-table { width: 100%; min-width: 1080px; border-spacing: 0; border-collapse: separate; color: var(--ink); text-align: left; }
 .ai-log-table thead { position: sticky; z-index: 1; top: 0; }
 .ai-log-table th { padding: 11px 13px; border-bottom: 1px solid #dce4ef; background: #f1f5fa; color: #5b6a7f; font-size: .72em; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
 .ai-log-table td { padding: 13px; border-bottom: 1px solid #e8edf3; font-size: .88em; vertical-align: middle; }
@@ -505,6 +527,11 @@ footer { padding: 22px 30px 30px; color: var(--muted); font-size: .72rem; text-a
 .ai-log-table tbody tr:hover td { background: #f8fbff; }
 .ai-log-table time, .ai-log-number { color: #53657d; white-space: nowrap; }
 .ai-log-table code { display: inline-block; max-width: 210px; padding: 4px 7px; overflow: hidden; border-radius: 6px; background: #eef2f7; color: #34445a; font-size: .86em; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
+.ai-log-prompt { width: min(300px, 32vw); }
+.ai-log-prompt summary { display: block; overflow: hidden; color: #304c71; cursor: pointer; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.ai-log-prompt summary::before { margin-right: 6px; color: #6f8eb7; content: "›"; }
+.ai-log-prompt[open] summary::before { content: "⌄"; }
+.ai-log-prompt p { max-height: 160px; margin: 9px 0 0; padding: 10px; overflow: auto; border-left: 3px solid #8bb4e8; border-radius: 6px; background: #f4f7fb; color: #3c4c62; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ai-role-badge { display: inline-flex; padding: 5px 8px; border: 1px solid #c9d9ef; border-radius: 999px; background: #f4f8ff; color: #2458af; font-weight: 800; white-space: nowrap; }
 .ai-log-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 750; }
 .ai-log-status::before { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; content: ""; }
@@ -1407,7 +1434,7 @@ body.large-text .guide-chat-suggestions button strong { font-size: .82rem; }
         margin-top: 18px;
         border-radius: 13px;
     }
-    .ai-log-panel summary {
+    .ai-log-panel > summary {
         min-height: 56px;
         padding: 12px 14px;
     }
@@ -1417,6 +1444,52 @@ body.large-text .guide-chat-suggestions button strong { font-size: .82rem; }
     }
     #aiLogList {
         padding: 12px;
+    }
+    .ai-log-flow {
+        padding: 13px;
+    }
+    .ai-log-flow-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 9px;
+    }
+    .ai-log-flow-stats {
+        justify-content: flex-start;
+    }
+    .ai-log-flow-list li {
+        position: relative;
+        grid-template-columns: 30px minmax(0, 1fr);
+        gap: 5px 8px;
+        padding-bottom: 8px;
+    }
+    .ai-log-flow-list li:not(:last-child)::after {
+        position: absolute;
+        top: 30px;
+        bottom: -3px;
+        left: 13px;
+        width: 2px;
+        background: #cad8e9;
+        content: "";
+    }
+    .ai-flow-order {
+        z-index: 1;
+        grid-row: 1 / 6;
+        align-self: start;
+    }
+    .ai-flow-node,
+    .ai-flow-arrow {
+        grid-column: 2;
+    }
+    .ai-flow-arrow {
+        height: 15px;
+        line-height: 15px;
+        transform: rotate(90deg);
+    }
+    .ai-flow-node strong {
+        white-space: normal;
+    }
+    .ai-log-flow-note {
+        text-align: left;
     }
     .ai-log-table-wrap {
         max-height: none;
@@ -1477,6 +1550,12 @@ body.large-text .guide-chat-suggestions button strong { font-size: .82rem; }
         max-width: 100%;
         white-space: normal;
         word-break: break-word;
+    }
+    .ai-log-prompt {
+        width: 100%;
+    }
+    .ai-log-prompt summary {
+        white-space: normal;
     }
     .ai-role-badge,
     .ai-log-status {

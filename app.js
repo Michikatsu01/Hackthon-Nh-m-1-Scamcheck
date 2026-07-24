@@ -77,6 +77,7 @@ const AI_USAGE_KEY = 'scamcheck-ai-usage';
 const AI_LOG_KEY = 'scamcheck-ai-log';
 const MAX_AI_CALLS_PER_SESSION = 12;
 const MAX_AI_LOG_ITEMS = 50;
+const MAX_AI_LOG_PROMPT_CHARACTERS = 5000;
 const PREFERENCE_KEY = 'scamcheck-accessibility';
 // Render Free may need about a minute to wake after an idle period.
 const AI_OPERATION_TIMEOUT_MS = 90000;
@@ -375,6 +376,7 @@ async function sendGuideQuestion(question) {
             role: 'guide',
             purpose: 'Trợ lý hướng dẫn',
             contents: buildGuideChatPrompt(),
+            userPrompt: rawQuestion,
             deadline: Date.now() + 25000
         });
         const reply = normalizeGuideReply(response.text);
@@ -422,13 +424,42 @@ function renderAiUsage() {
     if (aiLogCount) {
         aiLogCount.textContent = logs.length ? `${logs.length} bản ghi` : 'Trống';
     }
+    const successfulCalls = logs.filter(item => String(item.summary || '').toLocaleLowerCase('vi').startsWith('thành công')).length;
+    const flowItems = logs.slice(0, 6).reverse();
     aiLogList.innerHTML = logs.length
-        ? `<div class="ai-log-table-wrap">
+        ? `<section class="ai-log-flow" aria-labelledby="aiLogFlowTitle">
+            <div class="ai-log-flow-heading">
+                <div><span>Sơ đồ phiên</span><strong id="aiLogFlowTitle">Luồng prompt → AI → kết quả</strong></div>
+                <div class="ai-log-flow-stats" aria-label="Thống kê lượt gọi">
+                    <span><b>${logs.length}</b> tổng lượt</span>
+                    <span class="is-success"><b>${successfulCalls}</b> thành công</span>
+                    <span class="is-error"><b>${logs.length - successfulCalls}</b> lỗi</span>
+                </div>
+            </div>
+            <ol class="ai-log-flow-list">
+                ${flowItems.map((item, index) => {
+                    const prompt = String(item.prompt || 'Nhật ký cũ chưa lưu prompt.');
+                    const preview = prompt.replace(/\s+/g, ' ').trim().slice(0, 68);
+                    const isSuccess = String(item.summary || '').toLocaleLowerCase('vi').startsWith('thành công');
+                    return `<li class="${isSuccess ? 'is-success' : 'is-error'}">
+                        <span class="ai-flow-order">${logs.length - flowItems.length + index + 1}</span>
+                        <div class="ai-flow-node is-prompt"><small>Prompt</small><strong>${escapeHtml(preview || 'Không có nội dung')}${prompt.length > preview.length ? '…' : ''}</strong></div>
+                        <span class="ai-flow-arrow" aria-hidden="true">→</span>
+                        <div class="ai-flow-node is-role"><small>AI xử lý</small><strong>${escapeHtml(item.purpose || 'Không rõ')}</strong></div>
+                        <span class="ai-flow-arrow" aria-hidden="true">→</span>
+                        <div class="ai-flow-node is-result"><small>Kết quả</small><strong>${isSuccess ? 'Thành công' : 'Có lỗi'}</strong></div>
+                    </li>`;
+                }).join('')}
+            </ol>
+            ${logs.length > flowItems.length ? `<p class="ai-log-flow-note">Sơ đồ hiển thị ${flowItems.length} lượt gần nhất. Bảng bên dưới có đủ ${logs.length} bản ghi.</p>` : ''}
+        </section>
+        <div class="ai-log-table-wrap">
             <table class="ai-log-table">
                 <caption class="visually-hidden">Các lượt gọi AI trong phiên hiện tại</caption>
                 <thead>
                     <tr>
                         <th scope="col">Thời gian</th>
+                        <th scope="col">Prompt người dùng</th>
                         <th scope="col">Vai trò</th>
                         <th scope="col">Model</th>
                         <th scope="col">Đầu vào</th>
@@ -446,8 +477,16 @@ function renderAiUsage() {
                             ? inputLength.toLocaleString('vi-VN')
                             : String(item.inputLength || 0);
                         const isSuccess = String(item.summary || '').toLocaleLowerCase('vi').startsWith('thành công');
+                        const prompt = String(item.prompt || 'Nhật ký cũ chưa lưu prompt.');
+                        const promptPreview = prompt.replace(/\s+/g, ' ').trim().slice(0, 90);
                         return `<tr>
                             <td data-label="Thời gian"><time datetime="${escapeHtml(item.time)}">${escapeHtml(displayTime)}</time></td>
+                            <td data-label="Prompt người dùng">
+                                <details class="ai-log-prompt">
+                                    <summary>${escapeHtml(promptPreview || 'Không có nội dung')}${prompt.length > promptPreview.length ? '…' : ''}</summary>
+                                    <p>${escapeHtml(prompt)}</p>
+                                </details>
+                            </td>
                             <td data-label="Vai trò"><span class="ai-role-badge">${escapeHtml(item.purpose)}</span></td>
                             <td data-label="Model"><code>${escapeHtml(item.model)}</code></td>
                             <td data-label="Đầu vào" class="ai-log-number">${escapeHtml(displayLength)} ký tự</td>
@@ -475,9 +514,24 @@ function reserveAiCall() {
     renderAiUsage();
 }
 
-function logAiCall({ purpose, model, inputLength, summary }) {
+function normalizeAiLogPrompt(value) {
+    const prompt = String(value || '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+        .trim();
+    if (prompt.length <= MAX_AI_LOG_PROMPT_CHARACTERS) return prompt;
+    return `${prompt.slice(0, MAX_AI_LOG_PROMPT_CHARACTERS)}\n[Prompt đã được rút gọn trong nhật ký]`;
+}
+
+function logAiCall({ purpose, model, inputLength, summary, prompt }) {
     const logs = getAiLog();
-    logs.unshift({ time: new Date().toISOString(), purpose, model, inputLength, summary });
+    logs.unshift({
+        time: new Date().toISOString(),
+        purpose,
+        model,
+        inputLength,
+        summary,
+        prompt: normalizeAiLogPrompt(prompt)
+    });
     aiLogFallback = logs.slice(0, MAX_AI_LOG_ITEMS);
     try { sessionStorage.setItem(AI_LOG_KEY, JSON.stringify(aiLogFallback)); } catch { /* Dùng bộ nhớ tạm. */ }
     renderAiUsage();
@@ -525,7 +579,7 @@ function isTemporaryAiError(error) {
         || message.includes('TIMEOUT');
 }
 
-async function generateContentWithFallback({ contents, role, purpose, deadline = Date.now() + AI_OPERATION_TIMEOUT_MS, stream = false, onProgress = null }) {
+async function generateContentWithFallback({ contents, role, purpose, userPrompt = contents, deadline = Date.now() + AI_OPERATION_TIMEOUT_MS, stream = false, onProgress = null }) {
     if (navigator.onLine === false) throw createOfflineError();
     await assertLocalApiAvailable();
 
@@ -584,18 +638,18 @@ async function generateContentWithFallback({ contents, role, purpose, deadline =
                 }
                 if (done) break;
             }
-            logAiCall({ purpose, model, inputLength: String(contents).length, summary: `Thành công, ${responseText.length} ký tự` });
+            logAiCall({ purpose, model, inputLength: String(contents).length, prompt: userPrompt, summary: `Thành công, ${responseText.length} ký tự` });
             return { text: responseText };
         }
 
         const payload = await response.json();
         model = payload.model || model;
         const responseText = payload.text || '';
-        logAiCall({ purpose, model, inputLength: String(contents).length, summary: `Thành công, ${responseText.length} ký tự` });
+        logAiCall({ purpose, model, inputLength: String(contents).length, prompt: userPrompt, summary: `Thành công, ${responseText.length} ký tự` });
         return { text: responseText };
     } catch (error) {
         if (error?.code !== 'AI_SESSION_LIMIT') {
-            logAiCall({ purpose, model, inputLength: String(contents).length, summary: `Lỗi ${getApiStatus(error) || error?.name || 'kết nối'}` });
+            logAiCall({ purpose, model, inputLength: String(contents).length, prompt: userPrompt, summary: `Lỗi ${getApiStatus(error) || error?.name || 'kết nối'}` });
         }
         throw error;
     } finally {
@@ -1118,6 +1172,7 @@ async function handleRescueScenario(optionIndex) {
             purpose: 'Người ứng cứu',
             role: 'rescuer',
             contents: `<TIN_NHAN_KHONG_TIN_CAY>${currentResult.originalText}</TIN_NHAN_KHONG_TIN_CAY>\n<TINH_HUONG_DA_CHON>${selectedOption.tinh_huong}</TINH_HUONG_DA_CHON>`,
+            userPrompt: `${selectedOption.nhan}: ${selectedOption.tinh_huong}`,
         });
         const parsed = JSON.parse(response.text || '{}');
         if (!Array.isArray(parsed.steps) || parsed.steps.length < 3) throw new Error('Đầu ra Người ứng cứu không hợp lệ.');
@@ -2140,6 +2195,7 @@ checkBtn.addEventListener('click', async () => {
         const prompt = `<TIN_NHAN_KHONG_TIN_CAY>\n${text}\n</TIN_NHAN_KHONG_TIN_CAY>`;
         const response = await generateContentWithFallback({
             contents: prompt,
+            userPrompt: text,
             purpose: 'Thám tử',
             role: 'detective',
             deadline: detectiveDeadline,
@@ -2162,6 +2218,7 @@ checkBtn.addEventListener('click', async () => {
             try {
                 const psychologyResponse = await generateContentWithFallback({
                     contents: `<TIN_NHAN_KHONG_TIN_CAY>\n${text}\n</TIN_NHAN_KHONG_TIN_CAY>\n<KET_QUA_KY_THUAT>${JSON.stringify(analysis)}</KET_QUA_KY_THUAT>`,
+                    userPrompt: text,
                     purpose: 'Cô tâm lý',
                     role: 'psychology',
                     deadline: Date.now() + 18000,
@@ -2191,6 +2248,9 @@ checkBtn.addEventListener('click', async () => {
 async function runSelfTests() {
     const results = [];
     const assert = (name, condition) => results.push({ name, passed: Boolean(condition) });
+    assert('Nhật ký AI chuẩn hóa và giới hạn prompt người dùng',
+        normalizeAiLogPrompt('  Kiểm tra tin này  ') === 'Kiểm tra tin này'
+        && normalizeAiLogPrompt('A'.repeat(MAX_AI_LOG_PROMPT_CHARACTERS + 20)).includes('[Prompt đã được rút gọn trong nhật ký]'));
     const previousAccessibilityPreferences = getAccessibilityPreferences();
     setAccessibilityPreferences({ largeText: true });
     assert(
